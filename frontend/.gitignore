@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+.expo-shared/
+.web/
+dist/
+build/
+.vscode/
+.env
+npm-debug.log
+yarn-error.log
+.DS_Store
+android/
+ios/
