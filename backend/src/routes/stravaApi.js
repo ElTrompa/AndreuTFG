@@ -27,13 +27,76 @@ function extractAthleteId(req) {
   return null;
 }
 
+// Endpoint de diagnóstico para verificar que los datos de Strava se pueden obtener
+router.get('/athlete/debug', async (req, res) => {
+  const athlete_id = extractAthleteId(req) || req.query.athlete_id;
+  console.log('[DEBUG] athlete_id:', athlete_id);
+  
+  if (!athlete_id) {
+    return res.status(400).json({ 
+      error: 'Missing athlete_id',
+      auth_header: req.headers.authorization ? 'present' : 'missing',
+      hint: 'Use ?athlete_id=YOUR_ID or provide a valid JWT'
+    });
+  }
+
+  try {
+    // Check if athlete exists in DB
+    const { getAthleteById } = require('../models/tokens');
+    const athleteRecord = await getAthleteById(athlete_id);
+    if (!athleteRecord) {
+      return res.json({
+        error: 'Athlete not found in database',
+        athlete_id,
+        suggestions: 'Try logging in again to refresh tokens'
+      });
+    }
+
+    console.log('[DEBUG] Athlete record found, has_access_token:', !!athleteRecord.access_token, 'has_refresh_token:', !!athleteRecord.refresh_token);
+
+    // Try getting athlete data
+    const data = await strava.getAuthenticatedAthlete(athlete_id);
+    res.json({
+      ok: true,
+      athlete_id,
+      athlete: data,
+      db_record: {
+        has_access_token: !!athleteRecord.access_token,
+        has_refresh_token: !!athleteRecord.refresh_token,
+        expires_at: athleteRecord.expires_at
+      }
+    });
+  } catch (err) {
+    console.error('[DEBUG] Error:', err.message);
+    res.status(500).json({ 
+      error: String(err),
+      athlete_id,
+      details: err.body || null
+    });
+  }
+});
+
+// Endpoint para listar todos los atletas en BD (solo debug)
+router.get('/admin/athletes', async (req, res) => {
+  try {
+    const pool = await require('../db').getPool();
+    const [rows] = await pool.query('SELECT athlete_id, access_token IS NOT NULL as has_access_token, refresh_token IS NOT NULL as has_refresh_token, expires_at FROM athletes');
+    res.json({ athletes: rows });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 router.get('/athlete', async (req, res) => {
   const athlete_id = extractAthleteId(req);
+  console.log('[ATHLETE] Request for athlete_id:', athlete_id);
   if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id (JWT / ?athlete_id / x-athlete-id)' });
   try {
     const data = await strava.getAuthenticatedAthlete(athlete_id);
+    console.log('[ATHLETE] Success! Got athlete data:', data ? 'present' : 'empty');
     res.json(data);
   } catch (err) {
+    console.error('[ATHLETE] Error:', err.message, 'Status:', err.status || 500);
     res.status(err.status || 500).json({ error: String(err), details: err.body || null });
   }
 });

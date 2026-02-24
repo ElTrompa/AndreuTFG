@@ -61,6 +61,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [statsLoaded, setStatsLoaded] = useState(false);
+  const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
   const [authState, setAuthState] = useState<string | null>(null);
   const pollRef = useRef<any>(null);
   const [powerData, setPowerData] = useState<Record<string, number> | null>(null);
@@ -153,6 +154,7 @@ export default function App() {
   // Fetch saved profile when jwt changes
   useEffect(() => {
     if (!jwt) { setProfile(null); return; }
+    setAutoLoadAttempted(false);
     (async ()=>{
       try {
         const res = await fetch(`${API_BASE_URL}/profile`, { headers: { Authorization: `Bearer ${jwt}` } });
@@ -163,6 +165,7 @@ export default function App() {
       }
     })();
   }, [jwt]);
+
 
   const handleTokenLogin = async () => {
     if (!tokenInput) return Alert.alert('Token vacío', 'Pega aquí tu access token de Strava.');
@@ -247,6 +250,21 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  // Auto-load athlete + activities once after login (replaces old manual button)
+  useEffect(() => {
+    if (!jwt) {
+      setActivities([]);
+      setAthlete(null);
+      setStatsLoaded(false);
+      setAutoLoadAttempted(false);
+      return;
+    }
+    if (!statsLoaded && !loading && !autoLoadAttempted) {
+      setAutoLoadAttempted(true);
+      handleLoadActivities();
+    }
+  }, [jwt, statsLoaded, loading, autoLoadAttempted]);
 
   const stats = useMemo(() => {
     if (!activities.length) return null;
