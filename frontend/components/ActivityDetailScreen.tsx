@@ -7,6 +7,7 @@ const { width: screenWidth } = Dimensions.get('window');
 type Props = {
   activityId: number;
   jwt: string | null;
+  profile: any;
   apiBase?: string;
   onBack: () => void;
 };
@@ -41,7 +42,7 @@ function decodePolyline(encoded: string): [number, number][] {
   return points;
 }
 
-export default function ActivityDetailScreen({ activityId, jwt, apiBase = 'http://localhost:3001', onBack }: Props) {
+export default function ActivityDetailScreen({ activityId, jwt, profile, apiBase = 'http://localhost:3001', onBack }: Props) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export default function ActivityDetailScreen({ activityId, jwt, apiBase = 'http:
     setLoading(true);
     setError(null);
     
-    fetch(`${apiBase}/strava/activities/${activityId}?streams=true&stream_keys=time,watts,heartrate,cadence,temp,altitude,distance,latlng`, {
+    fetch(`${apiBase}/strava/activities/${activityId}?streams=true&stream_keys=time,watts,heartrate,cadence,temp,altitude,distance,latlng,velocity_smooth`, {
       headers: { Authorization: `Bearer ${jwt}` }
     })
       .then(r => {
@@ -112,6 +113,7 @@ export default function ActivityDetailScreen({ activityId, jwt, apiBase = 'http:
   let altitudeData: number[] = [];
   let distanceData: number[] = [];
   let timeData: number[] = [];
+  let velocityData: number[] = [];
 
   if (streams && Array.isArray(streams)) {
     const latlngStream = streams.find((s: any) => s.type === 'latlng');
@@ -122,6 +124,7 @@ export default function ActivityDetailScreen({ activityId, jwt, apiBase = 'http:
     const altitudeStream = streams.find((s: any) => s.type === 'altitude');
     const distanceStream = streams.find((s: any) => s.type === 'distance');
     const timeStream = streams.find((s: any) => s.type === 'time');
+    const velocityStream = streams.find((s: any) => s.type === 'velocity_smooth');
 
     if (latlngStream && Array.isArray(latlngStream.data)) latlngData = latlngStream.data;
     if (wattsStream && Array.isArray(wattsStream.data)) wattsData = wattsStream.data;
@@ -131,7 +134,136 @@ export default function ActivityDetailScreen({ activityId, jwt, apiBase = 'http:
     if (altitudeStream && Array.isArray(altitudeStream.data)) altitudeData = altitudeStream.data;
     if (distanceStream && Array.isArray(distanceStream.data)) distanceData = distanceStream.data;
     if (timeStream && Array.isArray(timeStream.data)) timeData = timeStream.data;
+    if (velocityStream && Array.isArray(velocityStream.data)) velocityData = velocityStream.data.map((v: number) => v * 3.6);
   }
+
+  // Calcular velocidad desde distancia y tiempo si no hay velocity stream
+  if (velocityData.length === 0 && distanceData.length > 0 && timeData.length > 0) {
+    for (let i = 1; i < distanceData.length; i++) {
+      const distDiff = distanceData[i] - distanceData[i - 1];
+      const timeDiff = timeData[i] - timeData[i - 1];
+      if (timeDiff > 0) {
+        velocityData.push((distDiff / timeDiff) * 3.6);
+      } else {
+        velocityData.push(0);
+      }
+    }
+  }
+
+  // Calcular velocidad máxima
+  const maxSpeed = velocityData.length > 0 ? Math.max(...velocityData) : activity.max_speed ? activity.max_speed * 3.6 : 0;
+
+  // Calcular nutrición y sustrato energético
+  const calculateNutrition = () => {
+    if (!profile) return null;
+
+    const duration = activity.moving_time || activity.elapsed_time || 0;
+    const durationHours = duration / 3600;
+    const calories = activity.calories || 0;
+
+    // Calcular intensidad promedio
+    let intensity = 0;
+    
+    // Priorizar potencia normalizada si hay FTP
+    if (analytics?.normalized_power && profile.ftp) {
+      intensity = (analytics.normalized_power / profile.ftp) * 100;
+    } 
+    // Si no, usar FC promedio con FC max
+    else if (activity.average_heartrate && profile.hr_max) {
+      intensity = (activity.average_heartrate / profile.hr_max) * 100;
+    }
+    // Si no hay datos, usar potencia promedio
+    else if (activity.average_watts && profile.ftp) {
+      intensity = (activity.average_watts / profile.ftp) * 100;
+    }
+
+    // Si no hay suficientes datos, no mostrar
+    if (intensity === 0 || calories === 0) return null;
+
+    // Determinar % de sustrato según intensidad
+    let carbsPercent = 50;
+    if (intensity < 55) {
+      carbsPercent = 40;
+    } else if (intensity < 75) {
+      carbsPercent = 60;
+    } else if (intensity < 85) {
+      carbsPercent = 75;
+    } else if (intensity < 95) {
+      carbsPercent = 85;
+    } else {
+      carbsPercent = 95;
+    }
+
+    const fatsPercent = 100 - carbsPercent;
+
+    // Calcular calorías y gramos
+    const carbsCalories = calories * (carbsPercent / 100);
+    const fatsCalories = calories * (fatsPercent / 100);
+    const carbsGrams = carbsCalories / 4; // 4 kcal por gramo de carbohidratos
+    const fatsGrams = fatsCalories / 9; // 9 kcal por gramo de grasas
+
+    // Recomendación de carbohidratos por hora basada en peso e intensidad
+    let carbsRecommendation = '';
+    let intensityLevel = '';
+    
+    if (!profile.weight_kg) {
+      carbsRecommendation = 'Configura tu peso en el perfil para obtener recomendaciones personalizadas';
+      intensityLevel = intensity < 55 ? 'Baja' : intensity < 75 ? 'Moderada' : intensity < 85 ? 'Alta' : 'Muy Alta';
+    } else {
+      // Determinar coeficientes según intensidad
+      let minCoef = 0;
+      let maxCoef = 0;
+      
+      if (intensity < 55) {
+        intensityLevel = 'Baja';
+        minCoef = 0.3;
+        maxCoef = 0.5;
+      } else if (intensity < 75) {
+        intensityLevel = 'Moderada';
+        minCoef = 0.5;
+        maxCoef = 0.8;
+      } else if (intensity < 85) {
+        intensityLevel = 'Alta';
+        minCoef = 0.8;
+        maxCoef = 1.2;
+      } else {
+        intensityLevel = 'Muy Alta';
+        minCoef = 1.0;
+        maxCoef = 1.5;
+      }
+
+      // Ajuste adicional por duración
+      if (durationHours < 1) {
+        minCoef = 0;
+        maxCoef = 0.5;
+        carbsRecommendation = `${Math.round(minCoef * profile.weight_kg)}-${Math.round(maxCoef * profile.weight_kg)}g/h (no es crítico para <1h)`;
+      } else if (durationHours > 2.5) {
+        // Para duraciones largas, aumentar el límite superior
+        maxCoef = Math.min(maxCoef + 0.3, 2.0);
+        carbsRecommendation = `${Math.round(minCoef * profile.weight_kg)}-${Math.round(maxCoef * profile.weight_kg)}g/h`;
+        if (maxCoef > 1.2) {
+          carbsRecommendation += ' (requiere entrenamiento intestinal)';
+        }
+      } else {
+        carbsRecommendation = `${Math.round(minCoef * profile.weight_kg)}-${Math.round(maxCoef * profile.weight_kg)}g/h`;
+      }
+      
+      carbsRecommendation += ` para ${profile.weight_kg}kg a intensidad ${intensityLevel.toLowerCase()}`;
+    }
+
+    return {
+      intensity: intensity.toFixed(1),
+      intensityLevel,
+      carbsPercent: carbsPercent.toFixed(0),
+      fatsPercent: fatsPercent.toFixed(0),
+      carbsGrams: carbsGrams.toFixed(0),
+      fatsGrams: fatsGrams.toFixed(0),
+      carbsRecommendation,
+      durationHours: durationHours.toFixed(1)
+    };
+  };
+
+  const nutrition = calculateNutrition();
 
   // Si no hay latlng stream pero hay polyline, decodificarlo
   if (latlngData.length === 0 && activity.map && activity.map.summary_polyline) {
@@ -247,6 +379,20 @@ export default function ActivityDetailScreen({ activityId, jwt, apiBase = 'http:
             <Text style={styles.summaryValue}>{((activity.average_speed || 0) * 3.6).toFixed(1)} km/h</Text>
           </View>
         </View>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Velocidad máxima</Text>
+            <Text style={styles.summaryValue}>{maxSpeed.toFixed(1)} km/h</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Desnivel</Text>
+            <Text style={styles.summaryValue}>{Math.round(activity.total_elevation_gain || 0)} m</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Calorías</Text>
+            <Text style={styles.summaryValue}>{Math.round(activity.calories || 0)}</Text>
+          </View>
+        </View>
         {isCycling && (
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
@@ -272,6 +418,13 @@ export default function ActivityDetailScreen({ activityId, jwt, apiBase = 'http:
       </View>
 
       {/* Gráficos */}
+      {velocityData.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>🚴 Velocidad</Text>
+          {renderChart(velocityData, 'Velocidad', '#06b6d4', 'km/h')}
+        </View>
+      )}
+
       {isCycling && wattsData.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>⚡ Potencia</Text>
@@ -322,6 +475,55 @@ export default function ActivityDetailScreen({ activityId, jwt, apiBase = 'http:
           <View style={styles.analyticsRow}>
             <Text style={styles.analyticsLabel}>NP:</Text>
             <Text style={styles.analyticsValue}>{Math.round(analytics.normalized_power || 0)} W</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Nutrición y Sustrato Energético */}
+      {nutrition && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>🍎 Nutrición y Sustrato Energético</Text>
+          
+          <View style={styles.nutritionSection}>
+            <Text style={styles.nutritionSubtitle}>Intensidad promedio: {nutrition.intensity}%</Text>
+          </View>
+
+          <View style={styles.nutritionSection}>
+            <Text style={styles.nutritionLabel}>Sustrato energético utilizado:</Text>
+            <View style={styles.substrateBar}>
+              <View style={[styles.substrateCarbs, { flex: parseFloat(nutrition.carbsPercent) }]}>
+                <Text style={styles.substrateText}>{nutrition.carbsPercent}% Carbohidratos</Text>
+              </View>
+              <View style={[styles.substrateFats, { flex: parseFloat(nutrition.fatsPercent) }]}>
+                <Text style={styles.substrateText}>{nutrition.fatsPercent}% Grasas</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.nutritionSection}>
+            <Text style={styles.nutritionLabel}>Carbohidratos consumidos:</Text>
+            <Text style={styles.nutritionValue}>{nutrition.carbsGrams}g ({Math.round(parseFloat(nutrition.carbsGrams) / parseFloat(nutrition.durationHours))}g/hora)</Text>
+          </View>
+
+          <View style={styles.nutritionSection}>
+            <Text style={styles.nutritionLabel}>Grasas consumidas:</Text>
+            <Text style={styles.nutritionValue}>{nutrition.fatsGrams}g</Text>
+          </View>
+
+          <View style={styles.recommendationBox}>
+            <Text style={styles.recommendationTitle}>💡 Recomendación de Carbohidratos</Text>
+            <Text style={styles.recommendationText}>
+              Intensidad: <Text style={styles.boldText}>{nutrition.intensityLevel}</Text> ({nutrition.intensity}%)
+            </Text>
+            <Text style={styles.recommendationText}>
+              Duración: <Text style={styles.boldText}>{nutrition.durationHours}h</Text>
+            </Text>
+            <Text style={styles.recommendationValue}>{nutrition.carbsRecommendation}</Text>
+            {profile?.weight_kg && (
+              <Text style={styles.recommendationHint}>
+                Esta recomendación está ajustada según tu peso y la intensidad del ejercicio.
+              </Text>
+            )}
           </View>
         </View>
       )}
@@ -453,5 +655,82 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  nutritionSection: {
+    marginBottom: 16,
+  },
+  nutritionSubtitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#3b82f6',
+    marginBottom: 8,
+  },
+  nutritionLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  nutritionValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  substrateBar: {
+    flexDirection: 'row',
+    height: 40,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  substrateCarbs: {
+    backgroundColor: '#fbbf24',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  substrateFats: {
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  substrateText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  recommendationBox: {
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+    marginTop: 8,
+  },
+  recommendationTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1e40af',
+    marginBottom: 6,
+  },
+  recommendationText: {
+    fontSize: 13,
+    color: '#4b5563',
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  recommendationValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e40af',
+    marginTop: 4,
+  },
+  boldText: {
+    fontWeight: '700',
+    color: '#111827',
+  },
+  recommendationHint: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontStyle: 'italic',
+    marginTop: 8,
   },
 });

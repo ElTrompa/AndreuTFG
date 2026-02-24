@@ -25,9 +25,12 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
         <TouchableOpacity style={styles.item} onPress={() => { navigate('Proyecciones'); onClose(); }}>
           <Text style={styles.itemText}>Proyecciones</Text>
         </TouchableOpacity>
-              <TouchableOpacity style={styles.item} onPress={() => { navigate('Profile'); onClose(); }}>
-                <Text style={styles.itemText}>Perfil</Text>
-              </TouchableOpacity>
+        <TouchableOpacity style={styles.item} onPress={() => { navigate('Palmares'); onClose(); }}>
+          <Text style={styles.itemText}>🏆 Palmarés</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.item} onPress={() => { navigate('Profile'); onClose(); }}>
+          <Text style={styles.itemText}>Perfil</Text>
+        </TouchableOpacity>
       </View>
       <TouchableOpacity style={styles.overlay} onPress={onClose} />
     </View>

@@ -13,6 +13,7 @@ import ProfileScreen from './components/ProfileScreen';
 import ActivitiesScreen from './components/ActivitiesScreen';
 import ActivityDetailScreen from './components/ActivityDetailScreen';
 import HomeScreen from './components/HomeScreen';
+import PalmaresScreen from './components/PalmaresScreen';
 import { StyleSheet, Text, View, Button, Linking, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { colors } from './theme';
@@ -54,7 +55,7 @@ const logoXml = `<?xml version="1.0" encoding="UTF-8"?>
 
 export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [screen, setScreen] = useState<'Home'|'Potencia'|'Proyecciones'|'Settings'|'Profile'|'Activities'|'ActivityDetail'>('Home');
+  const [screen, setScreen] = useState<'Home'|'Potencia'|'Proyecciones'|'Settings'|'Profile'|'Activities'|'ActivityDetail'|'Palmares'>('Home');
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
   const [jwt, setJwt] = useState<string | null>(null);
   const [athlete, setAthlete] = useState<any>(null);
@@ -325,7 +326,12 @@ export default function App() {
 
       {/* Activity Detail screen */}
       {jwt && screen === 'ActivityDetail' && selectedActivityId && (
-        <ActivityDetailScreen activityId={selectedActivityId} jwt={jwt} apiBase={API_BASE_URL} onBack={() => setScreen('Activities')} />
+        <ActivityDetailScreen activityId={selectedActivityId} jwt={jwt} profile={profile} apiBase={API_BASE_URL} onBack={() => setScreen('Activities')} />
+      )}
+
+      {/* Palmares screen */}
+      {jwt && screen === 'Palmares' && (
+        <PalmaresScreen jwt={jwt} apiBase={API_BASE_URL} />
       )}
 
     </ScrollView>

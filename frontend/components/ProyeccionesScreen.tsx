@@ -39,12 +39,11 @@ export default function ProyeccionesScreen({ activities }: Props){
     const trendFactor = avgLast6 / Math.max(0.0001, baselineWeekly);
 
     const weeksRemaining = Math.max(0, 52 - weeksPassed);
-    const projected = totalKm + avgLast6 * weeksRemaining;
+    
+    // Proyección: kilómetros actuales + tendencia de últimas 6 semanas aplicada al resto del año
+    const projectedByTrend = totalKm + avgLast6 * weeksRemaining;
 
-    const optimistic = projected * 1.1;
-    const pessimistic = projected * 0.9;
-
-    return { totalKm, weeksPassed, baselineWeekly, avgLast6, trendFactor, projected, optimistic, pessimistic };
+    return { totalKm, weeksPassed, baselineWeekly, avgLast6, trendFactor, projectedByTrend };
   }, [activities]);
 
   return (
@@ -65,16 +64,24 @@ export default function ProyeccionesScreen({ activities }: Props){
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.section}>Proyección al año (usando últimas 6 semanas)</Text>
-        <Text style={styles.proj}>{Math.round(data.projected)} km</Text>
-        <Text style={styles.hint}>Optimista (+10%): {Math.round(data.optimistic)} km</Text>
-        <Text style={styles.hint}>Pesimista (-10%): {Math.round(data.pessimistic)} km</Text>
+        <Text style={styles.section}>📊 Proyección al año</Text>
+        
+        <View style={styles.projectionItem}>
+          <Text style={styles.projValue}>{Math.round(data.projectedByTrend)} km</Text>
+          <Text style={styles.projHint}>
+            Basado en últimas 6 semanas: {Math.round(data.avgLast6)} km/semana × {52 - data.weeksPassed} semanas restantes + {Math.round(data.totalKm)} km ya realizados
+          </Text>
+        </View>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.section}>Qué significa</Text>
-        <Text style={styles.hint}>Si las últimas 6 semanas muestran más km que tu media anual, la proyección aumenta automáticamente.</Text>
-        <Text style={styles.hint}>Si has reducido el volumen, la estimación bajará.</Text>
+        <Text style={styles.section}>📌 Qué significa</Text>
+        <Text style={styles.hint}>
+          Esta proyección toma tu ritmo de las últimas 6 semanas y lo multiplica por las semanas que quedan hasta fin de año, sumándolo a tus kilómetros actuales.
+        </Text>
+        <Text style={styles.hint}>
+          Es más realista que proyectar solo tu promedio anual, ya que refleja tu rendimiento reciente.
+        </Text>
       </View>
     </View>
   );
@@ -86,7 +93,9 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 10 },
   label: { color: '#666', fontSize: 12 },
   value: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
-  section: { fontWeight: '700', marginBottom: 10 },
-  proj: { fontSize: 20, fontWeight: '800', color: '#0b4860' },
-  hint: { color: '#666', fontSize: 12, marginTop: 6 }
+  section: { fontWeight: '700', marginBottom: 12, fontSize: 16 },
+  projectionItem: { marginBottom: 12 },
+  projValue: { fontSize: 28, fontWeight: '800', color: '#0b4860', marginBottom: 8 },
+  projHint: { color: '#999', fontSize: 12, lineHeight: 18 },
+  hint: { color: '#666', fontSize: 12, marginTop: 6, lineHeight: 18 }
 });

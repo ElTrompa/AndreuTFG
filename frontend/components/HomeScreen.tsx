@@ -4,7 +4,7 @@ import { SvgXml } from 'react-native-svg';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-type ViewType = 'daily' | 'weekly' | 'monthly';
+type ViewType = 'weekly' | 'monthly' | 'yearly';
 
 interface PMCData {
   date: string;
@@ -120,12 +120,12 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
 
     let data: any[] = [];
     
-    if (view === 'daily') {
-      data = (pmcData.daily || []).slice(-14);
-    } else if (view === 'weekly') {
-      data = (pmcData.weekly || []).slice(-8);
-    } else {
+    if (view === 'weekly') {
+      data = (pmcData.weekly || []).slice(-12);
+    } else if (view === 'monthly') {
       data = (pmcData.monthly || []).slice(-12);
+    } else if (view === 'yearly') {
+      data = (pmcData.monthly || []).slice(-24);
     }
 
     if (data.length === 0) {
@@ -225,13 +225,50 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
   // Determinar el resumen según la vista seleccionada
   const getSummary = () => {
     if (!pmcData) return null;
-    if (view === 'daily' || view === 'weekly') {
+    if (view === 'weekly') {
       return pmcData.summary_week;
     }
     return pmcData.summary_month;
   };
 
+  const getCurrentMetrics = () => {
+    if (!pmcData) return { ctl: 0, atl: 0, tsb: 0, date: '', formLevel: '', fatigueLevel: '', freshnessLevel: '' };
+    
+    let data: any[] = [];
+    
+    if (view === 'weekly') {
+      data = (pmcData.weekly || []).slice(-12);
+    } else if (view === 'monthly') {
+      data = (pmcData.monthly || []).slice(-12);
+    } else if (view === 'yearly') {
+      data = (pmcData.monthly || []).slice(-24);
+    }
+    
+    if (data.length === 0) return { ctl: 0, atl: 0, tsb: 0, date: '', formLevel: '', fatigueLevel: '', freshnessLevel: '' };
+    
+    const lastPoint = data[data.length - 1];
+    const ctl = lastPoint.ctl || lastPoint.ctl_end || 0;
+    const atl = lastPoint.atl || lastPoint.atl_end || 0;
+    const tsb = lastPoint.tsb || lastPoint.tsb_end || 0;
+    
+    // Calcular niveles dinámicamente
+    const formLevel = ctl < 30 ? 'Bajo' : ctl < 50 ? 'En Desarrollo' : ctl < 80 ? 'Bueno' : 'Excelente';
+    const fatigueLevel = atl < 20 ? 'Baja' : atl < 40 ? 'Moderada' : atl < 60 ? 'Alta' : 'Muy Alta';
+    const freshnessLevel = tsb < -30 ? 'Sobrecargado' : tsb < -10 ? 'Cansado' : tsb < 5 ? 'Neutral' : tsb < 25 ? 'Fresco' : 'Muy Fresco';
+    
+    return {
+      ctl,
+      atl,
+      tsb,
+      date: lastPoint.date || lastPoint.week_start || lastPoint.month || '',
+      formLevel,
+      fatigueLevel,
+      freshnessLevel
+    };
+  };
+
   const summary = getSummary();
+  const currentMetrics = getCurrentMetrics();
 
   if (!profile?.ftp) {
     return (
@@ -260,14 +297,6 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
       {/* View Selector */}
       <View style={styles.viewSelector}>
         <TouchableOpacity 
-          style={[styles.viewButton, view === 'daily' && styles.viewButtonActive]}
-          onPress={() => setView('daily')}
-        >
-          <Text style={[styles.viewButtonText, view === 'daily' && styles.viewButtonTextActive]}>
-            Diario
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
           style={[styles.viewButton, view === 'weekly' && styles.viewButtonActive]}
           onPress={() => setView('weekly')}
         >
@@ -281,6 +310,14 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
         >
           <Text style={[styles.viewButtonText, view === 'monthly' && styles.viewButtonTextActive]}>
             Mensual
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.viewButton, view === 'yearly' && styles.viewButtonActive]}
+          onPress={() => setView('yearly')}
+        >
+          <Text style={[styles.viewButtonText, view === 'yearly' && styles.viewButtonTextActive]}>
+            Anual
           </Text>
         </TouchableOpacity>
       </View>
@@ -303,25 +340,32 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
 
       {!loading && !error && pmcData && summary && (
         <>
+          {/* Fecha de análisis */}
+          {currentMetrics.date && (
+            <View style={styles.dateCard}>
+              <Text style={styles.dateText}>📅 Datos al: {currentMetrics.date}</Text>
+            </View>
+          )}
+
           {/* Métricas Principales */}
           <View style={styles.metricsGrid}>
             {renderMetricCard(
               '💪 Forma (CTL)',
-              summary.current_ctl,
+              currentMetrics.ctl.toFixed(1),
               '#3b82f6',
-              formatStatusLabel(summary.status.form_level)
+              currentMetrics.formLevel
             )}
             {renderMetricCard(
               '😓 Fatiga (ATL)',
-              summary.current_atl,
+              currentMetrics.atl.toFixed(1),
               '#ef4444',
-              formatStatusLabel(summary.status.fatigue_level)
+              currentMetrics.fatigueLevel
             )}
             {renderMetricCard(
               '🌟 Frescura (TSB)',
-              summary.current_tsb > 0 ? `+${summary.current_tsb}` : summary.current_tsb,
-              summary.current_tsb > 0 ? '#10b981' : '#f59e0b',
-              formatStatusLabel(summary.status.freshness_level)
+              currentMetrics.tsb > 0 ? `+${currentMetrics.tsb.toFixed(1)}` : currentMetrics.tsb.toFixed(1),
+              currentMetrics.tsb > 0 ? '#10b981' : '#f59e0b',
+              currentMetrics.freshnessLevel
             )}
           </View>
 
@@ -356,12 +400,12 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
           {/* Estadísticas del período */}
           <View style={styles.statsCard}>
             <Text style={styles.statsTitle}>
-              {view === 'monthly' ? '📅 Último mes' : '📅 Última semana'}
+              {view === 'weekly' ? '📅 Última semana' : view === 'monthly' ? '📅 Último mes' : '📅 Último año'}
             </Text>
             <View style={styles.statsRow}>
               <Text style={styles.statsLabel}>TSS total:</Text>
               <Text style={styles.statsValue}>
-                {view === 'monthly' ? summary.monthly_tss : summary.weekly_tss}
+                {view === 'weekly' ? summary.weekly_tss : summary.monthly_tss}
               </Text>
             </View>
             <View style={styles.statsRow}>
@@ -431,6 +475,19 @@ const styles = StyleSheet.create({
   },
   viewButtonTextActive: {
     color: '#fff',
+  },
+  dateCard: {
+    backgroundColor: '#f3f4f6',
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  dateText: {
+    fontSize: 14,
+    color: '#4b5563',
+    fontWeight: '600',
   },
   metricsGrid: {
     padding: 16,
