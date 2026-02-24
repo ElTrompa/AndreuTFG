@@ -3,6 +3,10 @@
     "name": "TFGandreu",
     "slug": "tfgandreu-frontend",
     "version": "1.0.0",
-    "platforms": ["ios", "android", "web"]
+    "scheme": "tfgandreu",
+    "platforms": ["ios", "android", "web"],
+    "web": {
+      "output": "single"
+    }
   }
 }

@@ -186,6 +186,19 @@ Texto secundario | `#94A3B8`
 Primario | `#38BDF8`
 Secundario | `#4ADE80`
 
----
 
 Si quieres que adapte componentes o un tema global con estas variables (React Native / Expo Theme), dime y creo el archivo de tema y un ejemplo de uso en `frontend/`.
+
+## UI — Logo and theme integration
+
+- Se ha añadido un logo en `frontend/assets/logo.svg` y un archivo de tema `frontend/theme.ts` con la paleta de colores definida.
+- `App.tsx` ya usa el logo y las variables de color para que la interfaz tenga coherencia visual con el diseño del proyecto.
+
+Comandos para probar rápido (desde la carpeta `frontend`):
+
+```powershell
+npm install
+npm run start
+```
+
+Si quieres que adapte más pantallas (lista de actividades, detalle con mapa y streams), dime qué vista hago primero.

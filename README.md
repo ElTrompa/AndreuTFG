@@ -2,16 +2,24 @@
 
 ## 📌 Descripción del proyecto
 
-RideMetrics es una aplicación móvil multiplataforma orientada al análisis y mejora del rendimiento ciclista, integrada con la API de Strava. Permite visualizar entrenamientos con estadísticas detalladas, analizar la carga de entrenamiento semanal y generar proyecciones de rendimiento futuro como el kilometraje anual estimado.
+RideMetrics es una aplicación móvil multiplataforma orientada al análisis y mejora del rendimiento ciclista, integrada con la API de Strava. Proporciona analítica avanzada de ciclismo profesional que va más allá de lo que ofrece Strava, incluyendo:
+
+- 🔥 **Analítica Avanzada**: TSS, TRIMP, sustrato energético (grasas/carbohidratos), VO2, eficiencia aeróbica
+- 📊 **Performance Management Chart (PMC)**: Seguimiento de forma (CTL), fatiga (ATL) y frescura (TSB)
+- ⚡ **Sistema de Niveles**: 10 niveles realistas con umbrales de potencia absolutos por duración
+- 🏔️ **Análisis de Perfil**: Clasificación automática en Sprinter, Escalador o Rodador
+- 📈 **Curva de Potencia**: Visualización hexagonal con potencias máximas en 13 duraciones
 
 Este proyecto se desarrolla como parte del Proyecto Intermodular 2 del ciclo formativo de grado superior en Desarrollo de Aplicaciones Multiplataforma (DAM) en Florida Campus Alzira.
 
 ## 🎯 Objetivos
 
 - Integrar datos reales de entrenamientos mediante Strava.
-- Visualizar métricas deportivas de forma clara e intuitiva.
-- Analizar forma física, fatiga y carga de entrenamiento.
+- Ofrecer analítica avanzada nivel TrainingPeaks/INSCYD de forma gratuita.
+- Visualizar métricas deportivas con precisión científica.
+- Analizar forma física, fatiga y carga de entrenamiento (PMC).
 - Generar proyecciones de rendimiento a medio y largo plazo.
+- Proporcionar recomendaciones de entrenamiento personalizadas.
 - Aplicar arquitectura backend + frontend real.
 - Trabajar bajo metodología SCRUM.
 - Desplegar una aplicación completa en entorno cloud.
@@ -19,12 +27,138 @@ Este proyecto se desarrolla como parte del Proyecto Intermodular 2 del ciclo for
 
 ## 🧠 Motivación
 
-Muchas plataformas actuales de análisis deportivo ofrecen métricas avanzadas solo bajo suscripción. Este proyecto busca ofrecer una alternativa:
+Muchas plataformas actuales de análisis deportivo ofrecen métricas avanzadas solo bajo suscripción:
 
-- Gratuita
-- Intuitiva
-- Multiplataforma
-- Orientada a la mejora continua del deportista
+- **Strava Premium**: €80/año
+- **TrainingPeaks**: €120/año  
+- **INSCYD**: €500/año
+
+Este proyecto busca ofrecer una alternativa:
+
+- ✅ **Gratuita**
+- ✅ **Analítica profesional** (TSS, PMC, sustrato energético)
+- ✅ **Intuitiva** y multiplataforma
+- ✅ **Orientada a la mejora** continua del deportista
+- ✅ **Basada en ciencia** (estudios de Coggan, Banister)
+
+## 🚀 Características Principales
+
+### 📊 Performance Management Chart (PMC)
+
+Sistema profesional de seguimiento de rendimiento:
+
+- **CTL (Chronic Training Load)**: Forma a largo plazo (42 días)
+- **ATL (Acute Training Load)**: Fatiga a corto plazo (7 días)
+- **TSB (Training Stress Balance)**: Frescura (CTL - ATL)
+- **Vistas**: Diaria, Semanal, Mensual
+- **Recomendaciones**: Automáticas basadas en estado actual
+
+Documentación completa: [`PMC_SYSTEM.md`](backend/PMC_SYSTEM.md)
+
+### 🔥 Analítica Avanzada
+
+Para cada actividad se calcula:
+
+#### 1. Gasto Energético
+- Calorías metabólicas reales (kJ / eficiencia)
+- Ajuste por eficiencia mecánica personalizada
+
+#### 2. Sustrato Energético
+- **% Grasas vs Carbohidratos** con precisión
+- **Gramos exactos** de CHO y grasa oxidados
+- Método por IF (Intensity Factor) o por %FC reserva
+- Curvas de intensidad fisiológicas
+
+#### 3. Carga Interna
+- **TSS** (Training Stress Score): No disponible en Strava
+- **TRIMP** (Bannister): Carga fisiológica real
+- Personalizado con FC max/rest y FTP
+
+#### 4. Consumo de Oxígeno
+- **VO2 estimado** durante sesión (ml/kg/min)
+- **% VO2max** usado
+- Tiempo en zona aeróbica
+
+#### 5. Eficiencia Aeróbica
+- **EF** (Efficiency Factor): NP / FC media
+- **Aerobic Decoupling**: Detección de fatiga (>5% = fatiga)
+- Comparación primera vs segunda mitad
+
+#### 6. FatMax
+- Zona de máxima oxidación de grasa (60-65% VO2max)
+- Análisis de tiempo en zona óptima
+
+#### 7. Métricas Relativas
+- **W/kg promedio y normalizado**
+- Clave para rendimiento en subida
+
+#### 8. Depleción de Glucógeno
+- Gramos de glucógeno usados
+- % de reservas musculares
+- Estrategia de recuperación
+
+Documentación completa: [`ADVANCED_ANALYTICS.md`](backend/ADVANCED_ANALYTICS.md)
+
+### ⚡ Sistema de Niveles Realista
+
+10 niveles con umbrales absolutos de potencia por duración:
+
+| Nivel | Nombre | 5s | 1m | 1h |
+|-------|--------|----|----|-----|
+| 1 | Principiante | 500W | 220W | 85W |
+| 5 | Amateur Competitivo | 1200W | 480W | 245W |
+| 10 | Prof. World Tour | 2200W | 820W | 450W |
+
+- **13 duraciones** (5s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 20m, 30m, 45m, 1h)
+- **Progreso preciso** hasta siguiente nivel
+- **No relativo** al máximo personal
+
+### 🏔️ Análisis de Perfil Ciclista
+
+Clasificación automática basada en distribución de potencias:
+
+- **⚡ Sprinter**: Explosividad en corta duración (5s-15s)
+- **🏔️ Escalador**: Resistencia en media-larga duración (30m-1h)
+- **🚴 Rodador**: Equilibrio en todas las duraciones (5m-20m)
+
+Incluye:
+- Descripción del perfil
+- Fortalezas principales
+- Áreas de mejora
+- Emoji identificativo
+
+### 📈 Curva de Potencia
+
+Visualización hexagonal de potencias máximas en 13 duraciones:
+
+- Normalización independiente por duración
+- Tooltip mejorado con nivel actual
+- Contraste visual optimizado
+- Indicador "¡Nivel máximo! 🏆"
+
+### 🎯 Zonas de Potencia Personalizadas
+
+Basadas en FTP del perfil:
+
+- **Z1**: < 55% FTP (Recuperación)
+- **Z2**: 55-75% FTP (Resistencia)
+- **Z3**: 75-90% FTP (Tempo)
+- **Z4**: 90-105% FTP (Umbral)
+- **Z5**: > 105% FTP (VO2max)
+
+Gráfico de tiempo en cada zona por actividad.
+
+### 💾 Perfil Personalizado
+
+Configuración completa del atleta:
+
+- **FTP** (Watts)
+- **Peso** (kg)
+- **FC máxima** y **FC reposo** (bpm)
+- **VO2max** (ml/kg/min)
+- **Altura** (cm)
+
+Todos los cálculos se personalizan automáticamente.
 
 ## 🏗 Alcance del proyecto (contexto académico)
 

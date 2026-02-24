@@ -14,6 +14,24 @@ cp .env.example .env
 # Rellenar .env con tus credenciales de Strava
 ```
 
+Base de datos (MySQL)
+- Local (MySQL instalado): rellena `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` en `.env`.
+- Docker (recomendado): usa el `docker-compose.yml` del root y configura `DB_HOST=db`.
+
+Docker (solo MySQL)
+```powershell
+cd ..
+docker-compose up -d
+```
+
+Aplicar esquema de BD (si no se auto-crea)
+```powershell
+cd backend
+# si usas Docker, el esquema se carga al crear el contenedor
+# si usas MySQL local, ejecuta este script en tu cliente SQL
+type .\db\schema.sql
+```
+
 Ejecución
 ```powershell
 npm run dev   # requiere nodemon
