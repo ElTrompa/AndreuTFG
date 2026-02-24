@@ -11,8 +11,9 @@ import PotenciaScreen from './components/PotenciaScreen';
 import ProyeccionesScreen from './components/ProyeccionesScreen';
 import ProfileScreen from './components/ProfileScreen';
 import ActivitiesScreen from './components/ActivitiesScreen';
+import ActivityDetailScreen from './components/ActivityDetailScreen';
 import HomeScreen from './components/HomeScreen';
-import { StyleSheet, Text, View, Button, Linking, Alert, TextInput, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, Button, Linking, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { colors } from './theme';
 
@@ -53,8 +54,8 @@ const logoXml = `<?xml version="1.0" encoding="UTF-8"?>
 
 export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [screen, setScreen] = useState<'Home'|'Potencia'|'Proyecciones'|'Settings'|'Profile'|'Activities'>('Home');
-  const [tokenInput, setTokenInput] = useState('');
+  const [screen, setScreen] = useState<'Home'|'Potencia'|'Proyecciones'|'Settings'|'Profile'|'Activities'|'ActivityDetail'>('Home');
+  const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
   const [jwt, setJwt] = useState<string | null>(null);
   const [athlete, setAthlete] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
@@ -167,38 +168,6 @@ export default function App() {
   }, [jwt]);
 
 
-  const handleTokenLogin = async () => {
-    if (!tokenInput) return Alert.alert('Token vacío', 'Pega aquí tu access token de Strava.');
-    try {
-      setLoading(true);
-      setErrorMsg(null);
-      const res = await fetch(`${API_BASE_URL}/auth/token-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: tokenInput }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(JSON.stringify(data));
-        return;
-      }
-      setJwt(data.jwt || null);
-      setAthlete(data.athlete || null);
-      setActivities([]);
-      // fetch saved profile
-      try {
-        const pr = await fetch(`${API_BASE_URL}/profile`, { headers: { Authorization: `Bearer ${data.jwt}` } });
-        if (pr.ok) {
-          const pd = await pr.json();
-          if (pd && pd.ok) setProfile(pd.profile || null);
-        }
-      } catch (e) {}
-    } catch (err) {
-      setErrorMsg(String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLoadActivities = async () => {
     if (!jwt) return;
@@ -238,7 +207,7 @@ export default function App() {
 
       // fetch cached or computed power curve
       try {
-        const pRes = await fetch(`${API_BASE_URL}/strava/power-curve`, { headers: { Authorization: `Bearer ${jwt}` } });
+        const pRes = await fetch(`${API_BASE_URL}/strava/power-curve?days=730&per_page=200&max_pages=30&batch_delay_ms=200`, { headers: { Authorization: `Bearer ${jwt}` } });
         const pJson = await pRes.json();
         if (pRes.ok && pJson.ok && pJson.data) setPowerData(pJson.data);
       } catch (e) {
@@ -301,22 +270,6 @@ export default function App() {
 
   const powerMap = powerData || approxPowerMap;
 
-  // sample images paths - served from backend or assets
-  // Change these to HTTP URLs from your backend or local assets
-  const sampleImages = [
-    // Option 1: Serve from backend (recommended)
-    // `${API_BASE_URL}/images/sample1.jpeg`,
-    // `${API_BASE_URL}/images/sample2.jpeg`,
-    
-    // Option 2: Serve from local assets (copy images to /frontend/assets/)
-    // require('./assets/sample1.jpeg'),
-    // require('./assets/sample2.jpeg'),
-    
-    // For now, disabled to avoid CORS errors
-    // 'file:///c:/Users/andre/Desktop/DAM/DAM2/AndreuTFG/imagenesMuestra/WhatsApp Image 2026-02-17 at 17.45.54 (1).jpeg',
-    // 'file:///c:/Users/andre/Desktop/DAM/DAM2/AndreuTFG/imagenesMuestra/WhatsApp Image 2026-02-17 at 17.45.54.jpeg'
-  ];
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <SvgXml xml={logoXml} width={120} height={120} style={styles.logo} />
@@ -330,21 +283,6 @@ export default function App() {
           <View style={styles.button}>
             <Button title="Iniciar sesión con Strava" onPress={handleStravaAuth} />
           </View>
-          <Text style={styles.helpText}>Tras autorizar, Strava mostrará el token en el navegador.</Text>
-          <Text style={styles.helpText}>Cópialo y pégalo aquí para entrar en la app.</Text>
-          <Text style={styles.helpText}>O pega tu access token (single-user)</Text>
-          <TextInput
-            placeholder="Access token de Strava"
-            value={tokenInput}
-            onChangeText={setTokenInput}
-            style={styles.input}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholderTextColor={colors.textSecondary}
-          />
-          <View style={styles.button}>
-            <Button title={loading ? 'Entrando...' : 'Usar token'} onPress={handleTokenLogin} />
-          </View>
         </>
       )}
 
@@ -354,7 +292,7 @@ export default function App() {
 
       {/* Potencia screen */}
       {jwt && screen === 'Potencia' && (
-        <PotenciaScreen powerMap={powerMap} images={sampleImages} weightKg={profile && profile.weight_kg ? profile.weight_kg : (athlete && athlete.weight ? athlete.weight : null)} activities={activities} profile={profile} />
+        <PotenciaScreen powerMap={powerMap} weightKg={profile && profile.weight_kg ? profile.weight_kg : (athlete && athlete.weight ? athlete.weight : null)} activities={activities} profile={profile} />
       )}
 
       {/* Proyecciones screen */}
@@ -379,10 +317,17 @@ export default function App() {
 
       {/* Activities screen */}
       {jwt && screen === 'Activities' && (
-        <ActivitiesScreen jwt={jwt} apiBase={API_BASE_URL} profile={profile} />
+        <ActivitiesScreen jwt={jwt} apiBase={API_BASE_URL} profile={profile} onSelectActivity={(id) => {
+          setSelectedActivityId(id);
+          setScreen('ActivityDetail');
+        }} />
       )}
 
-      <Text style={styles.note}>Sigue el README en /frontend para instrucciones.</Text>
+      {/* Activity Detail screen */}
+      {jwt && screen === 'ActivityDetail' && selectedActivityId && (
+        <ActivityDetailScreen activityId={selectedActivityId} jwt={jwt} apiBase={API_BASE_URL} onBack={() => setScreen('Activities')} />
+      )}
+
     </ScrollView>
   );
 }
@@ -413,26 +358,6 @@ const styles = StyleSheet.create({
   button: {
     width: '100%',
     marginVertical: 12,
-  },
-  note: {
-    marginTop: 24,
-    color: colors.textSecondary,
-    fontSize: 12,
-    textAlign: 'center'
-  },
-  input: {
-    width: '100%',
-    borderColor: colors.border,
-    borderWidth: 1,
-    padding: 8,
-    marginTop: 8,
-    borderRadius: 6,
-    color: colors.textPrimary,
-    backgroundColor: colors.card
-  },
-  helpText: {
-    marginTop: 12,
-    color: colors.textSecondary
   },
   error: {
     width: '100%',

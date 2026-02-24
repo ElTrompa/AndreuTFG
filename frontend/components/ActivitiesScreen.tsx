@@ -6,6 +6,7 @@ type Props = {
   jwt: string | null;
   apiBase?: string;
   profile?: any;
+  onSelectActivity: (activityId: number) => void;
 };
 
 function secondsToHhMm(s:number){
@@ -64,7 +65,7 @@ function computeNPFromStream(powerStream:number[], timeStepSec=1){
   return Math.pow(mean4, 1/4);
 }
 
-export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001', profile }: Props){
+export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001', profile, onSelectActivity }: Props){
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
@@ -127,11 +128,7 @@ export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001
 
         return (
           <View key={id} style={styles.card}>
-            <TouchableOpacity onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setOpenId(openId===id? null : id);
-              if (!streamsCache[id]) loadStreams(id);
-            }}>
+            <TouchableOpacity onPress={() => onSelectActivity(id)}>
               <View style={styles.rowTop}>
                 <Text style={styles.name}>{act.name}</Text>
                 <Text style={styles.meta}>{date} · {Math.round((act.distance||0)/1000)} km</Text>

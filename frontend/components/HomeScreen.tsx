@@ -26,6 +26,7 @@ interface Summary {
   };
 }
 
+
 interface Props {
   jwt: string | null;
   profile: any;
@@ -38,6 +39,7 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
   const [loading, setLoading] = useState(false);
   const [pmcData, setPmcData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+
 
   useEffect(() => {
     console.log('[HomeScreen] useEffect triggered - jwt:', jwt ? 'present' : 'missing', 'profile:', profile ? 'present' : 'missing', 'ftp:', profile?.ftp || 'missing');
@@ -55,12 +57,12 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
       return;
     }
     
-    console.log('[loadPMCData] Starting request to', `${apiBase}/strava/pmc?view=all&days=90`);
+    console.log('[loadPMCData] Starting request to', `${apiBase}/strava/pmc?view=all&days=730`);
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`${apiBase}/strava/pmc?view=all&days=90`, {
+      const response = await fetch(`${apiBase}/strava/pmc?view=all&days=730`, {
         headers: { Authorization: `Bearer ${jwt}` }
       });
 
@@ -376,6 +378,7 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
           <TouchableOpacity style={styles.refreshButton} onPress={loadPMCData}>
             <Text style={styles.refreshButtonText}>🔄 Actualizar datos</Text>
           </TouchableOpacity>
+
         </>
       )}
     </ScrollView>

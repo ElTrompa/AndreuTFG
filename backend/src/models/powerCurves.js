@@ -24,10 +24,33 @@ async function savePowerCurve(athlete_id, data) {
 }
 
 // compute best rolling averages from recent activities
+async function listActivitiesPaged(athlete_id, opts = {}) {
+  const perPage = opts.perPage || 200;
+  const maxPages = opts.maxPages || 30;
+  const after = opts.after || null;
+  const all = [];
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const batch = await strava.getActivities(athlete_id, {
+      per_page: perPage,
+      page,
+      after: after || undefined
+    });
+    if (Array.isArray(batch) && batch.length) {
+      all.push(...batch);
+    }
+    if (!Array.isArray(batch) || batch.length < perPage) break;
+  }
+
+  return all;
+}
+
 async function computePowerCurve(athlete_id, opts = {}) {
-  const limit = opts.limit || 50;
   const after = opts.after || null; // optional epoch seconds
-  const activities = await strava.getActivities(athlete_id, { per_page: limit });
+  const perPage = opts.perPage || 200;
+  const maxPages = opts.maxPages || 30;
+  const batchDelayMs = Number(opts.batchDelayMs) || 0;
+  const activities = await listActivitiesPaged(athlete_id, { perPage, maxPages, after });
 
   // best power per duration
   const best = {};
@@ -67,12 +90,12 @@ async function computePowerCurve(athlete_id, opts = {}) {
         const localBest = {};
         for (const d of DURATIONS) {
           const winSec = d.sec;
-          const winSamples = Math.max(1, Math.round(winSec / secPerSample));
+          const winSamples = Math.max(1, Math.ceil(winSec / secPerSample));
           if (winSamples > n) { localBest[d.key] = 0; continue; }
           let localMax = 0;
           for (let s=0; s + winSamples <= n; s++) {
             const sum = prefix[s+winSamples] - prefix[s];
-            const avg = sum / (winSamples * secPerSample); // watts averaged per second
+            const avg = sum / winSamples; // average watts over the window
             if (avg > localMax) localMax = avg;
           }
           localBest[d.key] = Math.round(localMax);
@@ -90,6 +113,9 @@ async function computePowerCurve(athlete_id, opts = {}) {
       for (const k of Object.keys(res)) {
         if (res[k] > (best[k] || 0)) best[k] = res[k];
       }
+    }
+    if (batchDelayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, batchDelayMs));
     }
   }
 

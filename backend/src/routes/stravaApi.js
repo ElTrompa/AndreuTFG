@@ -226,14 +226,21 @@ router.get('/power-curve', async (req, res) => {
       if (ageMs < maxAgeHours * 3600 * 1000) return res.json({ ok: true, cached: true, data: cached.data, computed_at: cached.computed_at });
     }
 
-    const limit = Number(req.query.limit) || 50;
+    const daysParam = req.query.days;
+    const days = daysParam === 'all' ? 0 : Number(daysParam) || 730;
+    const perPage = Number(req.query.per_page) || 200;
+    const maxPages = Number(req.query.max_pages) || 30;
+    const batchDelayMs = Number(req.query.batch_delay_ms) || 0;
+    const afterTimestamp = days > 0
+      ? Math.floor((Date.now() / 1000) - (days * 86400))
+      : null;
     if (background) {
       // start compute asynchronously and return accepted
-      computePowerCurve(athlete_id, { limit }).then(() => console.log('background compute finished for', athlete_id)).catch(e => console.error('background compute error', e));
+      computePowerCurve(athlete_id, { perPage, maxPages, after: afterTimestamp, batchDelayMs }).then(() => console.log('background compute finished for', athlete_id)).catch(e => console.error('background compute error', e));
       return res.status(202).json({ ok: true, background: true, message: 'Computation started' });
     }
 
-    const data = await computePowerCurve(athlete_id, { limit });
+    const data = await computePowerCurve(athlete_id, { perPage, maxPages, after: afterTimestamp, batchDelayMs });
     // fetch saved curve to obtain computed_at timestamp
     const saved = await getPowerCurve(athlete_id);
     const computedAt = saved ? saved.computed_at : null;
@@ -261,16 +268,31 @@ router.get('/pmc', async (req, res) => {
     }
 
     // Obtener actividades (últimos 90 días por defecto)
-    const days = Number(req.query.days) || 90;
+    const daysParam = req.query.days;
+    const days = daysParam === 'all' ? 0 : Number(daysParam) || 90;
     const perPage = Number(req.query.per_page) || 200;
-    const afterTimestamp = Math.floor((Date.now() / 1000) - (days * 86400));
+    const maxPages = Number(req.query.max_pages) || 25;
+    const afterTimestamp = days > 0
+      ? Math.floor((Date.now() / 1000) - (days * 86400))
+      : null;
 
     let activities = [];
     try {
-      activities = await strava.getActivities(athlete_id, { 
-        after: afterTimestamp,
-        per_page: perPage 
-      });
+      const all = [];
+      let page = 1;
+      while (page <= maxPages) {
+        const batch = await strava.getActivities(athlete_id, {
+          after: afterTimestamp || undefined,
+          per_page: perPage,
+          page
+        });
+        if (Array.isArray(batch) && batch.length) {
+          all.push(...batch);
+        }
+        if (!Array.isArray(batch) || batch.length < perPage) break;
+        page += 1;
+      }
+      activities = all;
     } catch (stravaErr) {
       console.error('[PMC] Strava API error:', stravaErr.message);
       // If Strava API fails, return empty data instead of 500

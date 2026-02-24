@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import HexPowerChart, { durationsOrder } from './HexPowerChart';
 import TimeInZoneChart from './TimeInZoneChart';
 
 type Props = {
   powerMap: Record<string, number>;
-  images?: string[]; // optional file URIs or asset requires
   weightKg?: number | null;
   activities?: any[];
   profile?: any;
@@ -131,7 +130,7 @@ function analyzeCyclistProfile(powerMap: Record<string, number>): { type: string
   }
 }
 
-export default function PotenciaScreen({ powerMap, images, weightKg, activities = [], profile }: Props){
+export default function PotenciaScreen({ powerMap, weightKg, activities = [], profile }: Props){
   // Análisis de perfil del ciclista
   const cyclistProfile = analyzeCyclistProfile(powerMap);
   
@@ -245,14 +244,6 @@ export default function PotenciaScreen({ powerMap, images, weightKg, activities 
         <TimeInZoneChart activities={activities} powerMap={powerMap} profile={profile} />
       </View>
 
-      <View style={styles.samples}>
-        <Text style={styles.sectionTitle}>Ejemplos / Inspiración</Text>
-        {images && images.length > 0 ? images.map((src, i) => (
-          <Image key={i} source={{ uri: src }} style={styles.sampleImg} resizeMode="cover" />
-        )) : (
-          <Text style={styles.hint}>Coloca las imágenes en /frontend/assets/imagenesMuestra o pasa las rutas al componente.</Text>
-        )}
-      </View>
     </ScrollView>
   );
 }
@@ -282,8 +273,5 @@ const styles = StyleSheet.create({
   levelText: { fontWeight: '700' },
   missing: { color: '#666', fontSize: 12 },
   progressBar: { width: 120, height: 8, backgroundColor: '#e9f6f6', borderRadius: 6, marginTop: 6, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#2b9aa3' },
-  samples: { marginTop: 8 },
-  sampleImg: { width: '100%', height: 180, borderRadius: 8, marginBottom: 10 },
-  hint: { color: '#666' }
+  progressFill: { height: '100%', backgroundColor: '#2b9aa3' }
 });
