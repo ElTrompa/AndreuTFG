@@ -1,14 +1,17 @@
 /**
  * Rate Limiter Service for Strava API
  * Handles request queuing, rate limit tracking, and exponential backoff
+ * Optimized for high-volume operations like achievements endpoint
  */
 
 class RateLimiter {
   constructor(options = {}) {
     // Strava rate limits: 600 requests per 15 minutes = 100 per 2.5 min = 1 per 1.5 secs
-    this.requestsPerWindow = options.requestsPerWindow || 600;
+    // However, we use 100 req/15min for read operations (safe limit)
+    this.requestsPerWindow = options.requestsPerWindow || 100; // Conservative: 100/15min
     this.windowMs = options.windowMs || 15 * 60 * 1000; // 15 minutes
-    this.minDelayMs = options.minDelayMs || 100; // Minimum delay between requests
+    this.minDelayMs = options.minDelayMs || 200; // Increased from 100 for safety
+    this.adaptiveDelayMs = 200; // Adaptive delay based on usage
 
     // Rate limit state
     this.requestsInWindow = [];
@@ -16,9 +19,15 @@ class RateLimiter {
     this.currentUsage = 0;
     this.resetTime = null;
 
-    // Request queue
-    this.queue = [];
+    // Request queue with priorities
+    this.highPriorityQueue = [];
+    this.normalPriorityQueue = [];
+    this.lowPriorityQueue = [];
     this.processing = false;
+
+    // Endpoint tracking for optimization
+    this.endpointUsage = {};
+    this.lastFlushTime = Date.now();
   }
 
   /**
@@ -53,40 +62,85 @@ class RateLimiter {
   }
 
   /**
-   * Get current rate limit status
+   * Track endpoint usage for analytics
+   */
+  trackEndpoint(endpoint) {
+    this.endpointUsage[endpoint] = (this.endpointUsage[endpoint] || 0) + 1;
+  }
+
+  /**
+   * Get current rate limit status with detailed analytics
    * @returns {object} Rate limit info
    */
   getStatus() {
+    const remaining = Math.max(0, this.currentLimit - this.currentUsage);
+    const percentageUsed = Math.round((this.currentUsage / this.currentLimit) * 100);
+    
     return {
       requestsUsed: this.currentUsage,
       requestsLimit: this.currentLimit,
-      requestsRemaining: Math.max(0, this.currentLimit - this.currentUsage),
-      percentageUsed: Math.round((this.currentUsage / this.currentLimit) * 100),
-      queueLength: this.queue.length
+      requestsRemaining: remaining,
+      percentageUsed: percentageUsed,
+      queueLength: this.highPriorityQueue.length + this.normalPriorityQueue.length + this.lowPriorityQueue.length,
+      highPriorityQueue: this.highPriorityQueue.length,
+      normalPriorityQueue: this.normalPriorityQueue.length,
+      lowPriorityQueue: this.lowPriorityQueue.length,
+      estimatedResetMs: this.getEstimatedResetTime()
     };
   }
 
   /**
-   * Queue a request to be executed with rate limit awareness
+   * Get estimated time until rate limit resets
+   */
+  getEstimatedResetTime() {
+    const windowAge = Date.now() - (this.resetTime || Date.now());
+    const remaining = this.windowMs - windowAge;
+    return Math.max(0, remaining);
+  }
+
+  /**
+   * Queue a request with optional priority
    * @param {function} requestFn - Async function that makes the request
+   * @param {string} priority - 'high', 'normal', or 'low'
    * @returns {promise} Resolves with request result
    */
-  async enqueue(requestFn) {
+  async enqueue(requestFn, priority = 'normal') {
     return new Promise((resolve, reject) => {
-      this.queue.push({ requestFn, resolve, reject });
+      const request = { requestFn, resolve, reject };
+      
+      if (priority === 'high') {
+        this.highPriorityQueue.push(request);
+      } else if (priority === 'low') {
+        this.lowPriorityQueue.push(request);
+      } else {
+        this.normalPriorityQueue.push(request);
+      }
+      
       this.processQueue();
     });
   }
 
   /**
-   * Process the request queue
+   * Process the request queue (high priority first, then normal, then low)
    */
   async processQueue() {
-    if (this.processing || this.queue.length === 0) return;
+    if (this.processing) return;
     this.processing = true;
 
-    while (this.queue.length > 0) {
-      const { requestFn, resolve, reject } = this.queue.shift();
+    while (this.getQueueLength() > 0) {
+      // Get next request from appropriate queue
+      let request;
+      if (this.highPriorityQueue.length > 0) {
+        request = this.highPriorityQueue.shift();
+      } else if (this.normalPriorityQueue.length > 0) {
+        request = this.normalPriorityQueue.shift();
+      } else if (this.lowPriorityQueue.length > 0) {
+        request = this.lowPriorityQueue.shift();
+      }
+
+      if (!request) break;
+
+      const { requestFn, resolve, reject } = request;
 
       try {
         // Wait before making the request
@@ -98,9 +152,9 @@ class RateLimiter {
       } catch (error) {
         // Handle rate limit errors with backoff
         if (error.status === 429) {
-          console.warn('[RateLimit] Hit 429, backing off...');
-          // Put request back in queue for retry
-          this.queue.unshift({ requestFn, resolve, reject });
+          console.warn('[RateLimit] Hit 429, backing off and re-queuing request...');
+          // Put request back in queue for retry (high priority)
+          this.highPriorityQueue.unshift({ requestFn, resolve, reject });
           // Wait longer before retrying
           await this.backoff(error);
           // Don't process more queue items yet
@@ -115,6 +169,24 @@ class RateLimiter {
   }
 
   /**
+   * Calculate adaptive delay based on current usage
+   */
+  getAdaptiveDelay() {
+    const status = this.getStatus();
+    const percentageUsed = status.percentageUsed;
+
+    if (percentageUsed > 90) {
+      return 1000; // 1 second delay if >90% used
+    } else if (percentageUsed > 75) {
+      return 500; // 500ms delay if >75% used
+    } else if (percentageUsed > 50) {
+      return 300; // 300ms delay if >50% used
+    } else {
+      return this.minDelayMs; // Default min delay
+    }
+  }
+
+  /**
    * Wait before making a request
    */
   async waitBeforeRequest() {
@@ -122,24 +194,36 @@ class RateLimiter {
     
     // If we're using >90% of quota, wait until reset
     if (status.percentageUsed > 90) {
-      console.warn(`[RateLimit] High usage (${status.percentageUsed}%), throttling requests`);
-      const waitTime = Math.max(5000, this.windowMs - (Date.now() - this.getWindowStart()));
-      console.log(`[RateLimit] Waiting ${waitTime}ms before next request`);
+      console.warn(`[RateLimit] HIGH USAGE (${status.percentageUsed}%), throttling requests`);
+      const resetMs = this.getEstimatedResetTime();
+      const waitTime = Math.max(5000, resetMs);
+      console.log(`[RateLimit] Waiting ${waitTime}ms before next request (reset in ${resetMs}ms)`);
       await sleep(waitTime);
+    } else if (status.percentageUsed > 70) {
+      console.warn(`[RateLimit] Moderate usage (${status.percentageUsed}%), applying adaptive delay`);
     }
     
-    // Ensure minimum delay between requests
-    await sleep(this.minDelayMs);
+    // Apply adaptive delay based on current usage
+    const delayMs = this.getAdaptiveDelay();
+    if (delayMs > 0) {
+      await sleep(delayMs);
+    }
   }
 
   /**
-   * Exponential backoff for rate limit errors
+   * Exponential backoff for rate limit errors with smarter waiting
    */
   async backoff(error) {
     // Extract retry-after if available, otherwise use exponential backoff
-    const retryAfter = error.retryAfter ? parseInt(error.retryAfter, 10) : 30;
-    const waitMs = Math.min(retryAfter * 1000, 60000); // Max 60 seconds
-    console.log(`[RateLimit] Backing off for ${waitMs}ms`);
+    let retryAfter = 30; // Default to 30 seconds
+    
+    if (error.retryAfter) {
+      retryAfter = parseInt(error.retryAfter, 10);
+    }
+    
+    // Be conservative: add buffer to retry-after
+    const waitMs = Math.min((retryAfter + 5) * 1000, 120000); // Max 2 minutes
+    console.log(`[RateLimit] Backing off for ${waitMs}ms (retry-after: ${retryAfter}s)`);
     await sleep(waitMs);
   }
 
@@ -160,10 +244,24 @@ class RateLimiter {
     const now = Date.now();
     const windowAge = now - this.getWindowStart();
     if (windowAge > this.windowMs) {
-      console.log('[RateLimit] Window expired, resetting');
+      console.log('[RateLimit] 15-minute window expired, resetting counters');
       this.resetTime = now;
       this.currentUsage = 0;
     }
+  }
+
+  /**
+   * Get total queue length
+   */
+  getQueueLength() {
+    return this.highPriorityQueue.length + this.normalPriorityQueue.length + this.lowPriorityQueue.length;
+  }
+
+  /**
+   * Get endpoint usage statistics
+   */
+  getEndpointStats() {
+    return this.endpointUsage;
   }
 }
 

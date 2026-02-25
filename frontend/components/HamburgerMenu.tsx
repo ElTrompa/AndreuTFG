@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { colors } from '../theme';
 
 type Props = {
   open: boolean;
@@ -9,39 +10,211 @@ type Props = {
 
 export default function HamburgerMenu({ open, onClose, navigate }: Props){
   if (!open) return null;
+  
+  const handleNavigate = (screen: string) => {
+    navigate(screen);
+    onClose();
+  };
+
   return (
     <View style={styles.backdrop}>
-      <View style={styles.menu}>
-        <Text style={styles.title}>Menú</Text>
-        <TouchableOpacity style={styles.item} onPress={() => { navigate('Home'); onClose(); }}>
+      <ScrollView style={styles.menu} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>🚴 RideMetrics</Text>
+        
+        {/* Core Navigation */}
+        <Text style={styles.sectionTitle}>CORE</Text>
+        <TouchableOpacity style={styles.item} onPress={() => handleNavigate('Home')}>
+          <Text style={styles.itemIcon}>🏠</Text>
           <Text style={styles.itemText}>Inicio</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.item} onPress={() => { navigate('Potencia'); onClose(); }}>
-          <Text style={styles.itemText}>Potencia</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.item} onPress={() => { navigate('Activities'); onClose(); }}>
+        
+        <TouchableOpacity style={styles.item} onPress={() => handleNavigate('Activities')}>
+          <Text style={styles.itemIcon}>📋</Text>
           <Text style={styles.itemText}>Actividades</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.item} onPress={() => { navigate('Proyecciones'); onClose(); }}>
-          <Text style={styles.itemText}>Proyecciones</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.item} onPress={() => { navigate('Palmares'); onClose(); }}>
-          <Text style={styles.itemText}>🏆 Palmarés</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.item} onPress={() => { navigate('Profile'); onClose(); }}>
+
+        <TouchableOpacity style={styles.item} onPress={() => handleNavigate('Profile')}>
+          <Text style={styles.itemIcon}>👤</Text>
           <Text style={styles.itemText}>Perfil</Text>
         </TouchableOpacity>
-      </View>
+
+        {/* Traditional Analytics */}
+        <Text style={styles.sectionTitle}>ANALYTICS</Text>
+        <TouchableOpacity style={styles.item} onPress={() => handleNavigate('Potencia')}>
+          <Text style={styles.itemIcon}>⚡</Text>
+          <Text style={styles.itemText}>Potencia (FTP)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.item} onPress={() => handleNavigate('Proyecciones')}>
+          <Text style={styles.itemIcon}>📈</Text>
+          <Text style={styles.itemText}>Proyecciones (PMC)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.item} onPress={() => handleNavigate('Palmares')}>
+          <Text style={styles.itemIcon}>🏆</Text>
+          <Text style={styles.itemText}>Palmarés (KOMs)</Text>
+        </TouchableOpacity>
+
+        {/* Advanced Features */}
+        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>🚀 ADVANCED (NEW!)</Text>
+        
+        <TouchableOpacity 
+          style={[styles.item, styles.premiumItem]} 
+          onPress={() => handleNavigate('AdvancedAnalytics')}
+        >
+          <Text style={styles.itemIcon}>🔮</Text>
+          <View>
+            <Text style={styles.itemText}>Advanced Analytics</Text>
+            <Text style={styles.itemSubText}>FTP • CP • PMC Forecast • Coach</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.item, styles.premiumItem]} 
+          onPress={() => handleNavigate('MetricasAvanzadas')}
+        >
+          <Text style={styles.itemIcon}>📊</Text>
+          <View>
+            <Text style={styles.itemText}>Métricas Avanzadas</Text>
+            <Text style={styles.itemSubText}>VI • Pacing • Peaks • Efficiency</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.item, styles.premiumItem]} 
+          onPress={() => handleNavigate('HRV')}
+        >
+          <Text style={styles.itemIcon}>❤️</Text>
+          <View>
+            <Text style={styles.itemText}>HRV & Recovery</Text>
+            <Text style={styles.itemSubText}>Heart Rate Variability Analysis</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.item, styles.premiumItem]} 
+          onPress={() => handleNavigate('Terrain')}
+        >
+          <Text style={styles.itemIcon}>⛰️</Text>
+          <View>
+            <Text style={styles.itemText}>Terrain Analysis</Text>
+            <Text style={styles.itemSubText}>Climb Detection • Simulation</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.item, styles.premiumItem]} 
+          onPress={() => handleNavigate('SessionClassifier')}
+        >
+          <Text style={styles.itemIcon}>🎯</Text>
+          <View>
+            <Text style={styles.itemText}>Session Classifier</Text>
+            <Text style={styles.itemSubText}>AI Training Type Detection</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Coming Soon */}
+        <Text style={[styles.sectionTitle, { marginTop: 12, color: colors.textSecondary }]}>MORE COMING</Text>
+        <View style={styles.disabledItem}>
+          <Text style={styles.itemIcon}>🤖</Text>
+          <View>
+            <Text style={styles.disabledText}>ML Predictions</Text>
+            <Text style={styles.itemSubText}>Advanced forecasting</Text>
+          </View>
+        </View>
+
+        <View style={styles.disabledItem}>
+          <Text style={styles.itemIcon}>🌍</Text>
+          <View>
+            <Text style={styles.disabledText}>Social Leaderboards</Text>
+            <Text style={styles.itemSubText}>Anonymous rankings</Text>
+          </View>
+        </View>
+
+        <View style={{ height: 20 }} />
+      </ScrollView>
       <TouchableOpacity style={styles.overlay} onPress={onClose} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, flexDirection: 'row' },
-  menu: { width: 260, backgroundColor: '#fff', padding: 16, elevation: 6, boxShadow: 'rgba(0, 0, 0, 0.12) 0px 0px 12px' },
-  title: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
-  item: { paddingVertical: 10 },
-  itemText: { fontSize: 16 },
-  overlay: { flex: 1 }
+  backdrop: { 
+    position: 'absolute', 
+    left: 0, 
+    top: 0, 
+    right: 0, 
+    bottom: 0, 
+    flexDirection: 'row',
+    zIndex: 1000,
+  },
+  menu: { 
+    width: 280, 
+    backgroundColor: colors.background,
+    paddingTop: 16,
+    elevation: 8, 
+    boxShadow: 'rgba(0, 0, 0, 0.2) 0px 0px 16px',
+  },
+  title: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    color: colors.primary,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 12,
+    letterSpacing: 1,
+  },
+  item: { 
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent',
+  },
+  premiumItem: {
+    backgroundColor: colors.card,
+    marginHorizontal: 8,
+    borderRadius: 8,
+    marginVertical: 4,
+    paddingLeft: 12,
+    borderLeftWidth: 0,
+  },
+  itemIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  itemText: { 
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  itemSubText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  disabledItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    opacity: 0.5,
+  },
+  disabledText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  overlay: { 
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  }
 });

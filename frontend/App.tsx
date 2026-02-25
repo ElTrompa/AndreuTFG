@@ -14,6 +14,11 @@ import ActivitiesScreen from './components/ActivitiesScreen';
 import ActivityDetailScreen from './components/ActivityDetailScreen';
 import HomeScreen from './components/HomeScreen';
 import PalmaresScreen from './components/PalmaresScreen';
+import AdvancedAnalyticsScreen from './components/AdvancedAnalyticsScreen';
+import MetricasAvanzadasScreen from './components/MetricasAvanzadasScreen';
+import HRVScreen from './components/HRVScreen';
+import TerrainScreen from './components/TerrainScreen';
+import SessionClassifierScreen from './components/SessionClassifierScreen';
 import { StyleSheet, Text, View, Button, Linking, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { colors } from './theme';
@@ -55,7 +60,7 @@ const logoXml = `<?xml version="1.0" encoding="UTF-8"?>
 
 export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [screen, setScreen] = useState<'Home'|'Potencia'|'Proyecciones'|'Settings'|'Profile'|'Activities'|'ActivityDetail'|'Palmares'>('Home');
+  const [screen, setScreen] = useState<'Home'|'Potencia'|'Proyecciones'|'Settings'|'Profile'|'Activities'|'ActivityDetail'|'Palmares'|'AdvancedAnalytics'|'MetricasAvanzadas'|'HRV'|'Terrain'|'SessionClassifier'>('Home');
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
   const [jwt, setJwt] = useState<string | null>(null);
   const [athlete, setAthlete] = useState<any>(null);
@@ -332,6 +337,31 @@ export default function App() {
       {/* Palmares screen */}
       {jwt && screen === 'Palmares' && (
         <PalmaresScreen jwt={jwt} apiBase={API_BASE_URL} />
+      )}
+
+      {/* Advanced Analytics screen */}
+      {jwt && screen === 'AdvancedAnalytics' && (
+        <AdvancedAnalyticsScreen jwt={jwt} apiBase={API_BASE_URL} />
+      )}
+
+      {/* Métricas Avanzadas screen */}
+      {jwt && screen === 'MetricasAvanzadas' && (
+        <MetricasAvanzadasScreen jwt={jwt} apiBase={API_BASE_URL} />
+      )}
+
+      {/* HRV & Recovery screen */}
+      {jwt && screen === 'HRV' && (
+        <HRVScreen jwt={jwt} apiBase={API_BASE_URL} />
+      )}
+
+      {/* Terrain Analysis screen */}
+      {jwt && screen === 'Terrain' && (
+        <TerrainScreen jwt={jwt} apiBase={API_BASE_URL} />
+      )}
+
+      {/* Session Classifier screen */}
+      {jwt && screen === 'SessionClassifier' && (
+        <SessionClassifierScreen jwt={jwt} apiBase={API_BASE_URL} />
       )}
 
     </ScrollView>

@@ -398,32 +398,58 @@ router.get('/achievements', async (req, res) => {
   if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id' });
 
   try {
-    // Obtener actividades recientes (por defecto 6 meses, pero configurable)
+    const { getPool } = require('../db');
+    const pool = await getPool();
     const daysParam = req.query.days;
     const days = daysParam === 'all' ? 0 : Number(daysParam) || 180;
+    const batchDelayMs = Number(req.query.batch_delay_ms) || 300;
+    const force = String(req.query.force || '').toLowerCase() === 'true' || req.query.force === '1';
+
+    // STEP 1: Verificar caché en BD (más eficiente que memory)
+    if (!force) {
+      const [rows] = await pool.query(
+        'SELECT * FROM achievements_cache WHERE athlete_id = ? AND days_range = ? AND TIMESTAMPDIFF(HOUR, cached_at, NOW()) < 24',
+        [athlete_id, days]
+      );
+      
+      if (rows && rows.length > 0) {
+        const dbCache = rows[0];
+        console.log('[Achievements] Using DB cache (24h valid)');
+        return res.json({
+          koms: JSON.parse(dbCache.koms || '[]'),
+          top10: JSON.parse(dbCache.top10 || '[]'),
+          podios: JSON.parse(dbCache.podios || '[]'),
+          localLegends: JSON.parse(dbCache.local_legends || '[]'),
+          total_segments: dbCache.total_segments,
+          cached: true,
+          cached_at: dbCache.cached_at
+        });
+      }
+    }
+
     const afterTimestamp = days > 0
       ? Math.floor((Date.now() / 1000) - (days * 86400))
       : null;
     const perPage = Number(req.query.per_page) || 100;
     const maxPages = Number(req.query.max_pages) || 10;
-    const batchDelayMs = Number(req.query.batch_delay_ms) || 300;
-    const force = String(req.query.force || '').toLowerCase() === 'true' || req.query.force === '1';
 
-    const cacheKey = `${athlete_id}:${daysParam || 180}:${perPage}:${maxPages}`;
-    const cached = achievementsCache.get(cacheKey);
-    if (cached && !force) {
-      const ageMs = Date.now() - cached.cached_at;
-      if (ageMs < ACHIEVEMENTS_CACHE_TTL_MS) {
-        return res.json({ ...cached.data, cached: true, cached_at: cached.cached_at });
-      }
-    }
+    // STEP 2: Get last sync time to fetch only NEW activities
+    const [syncRows] = await pool.query(
+      'SELECT last_sync_timestamp FROM api_sync_log WHERE athlete_id = ? AND endpoint = "activities"',
+      [athlete_id]
+    );
+    const lastSync = syncRows && syncRows.length > 0 ? syncRows[0].last_sync_timestamp : (afterTimestamp || 0);
 
+    const syncAfterTimestamp = lastSync || afterTimestamp;
+    console.log('[Achievements] Last sync:', new Date(syncAfterTimestamp * 1000), 'Fetching newer activities...');
+
+    // STEP 3: Fetch ONLY new activities since last sync
     let activities = [];
     let page = 1;
     
     while (page <= maxPages) {
       const batch = await strava.getActivities(athlete_id, {
-        after: afterTimestamp || undefined,
+        after: syncAfterTimestamp || undefined,
         per_page: perPage,
         page
       });
@@ -434,97 +460,130 @@ router.get('/achievements', async (req, res) => {
       page += 1;
     }
 
-    console.log('[Achievements] Fetched', activities.length, 'activities');
+    console.log('[Achievements] Fetched', activities.length, 'NEW activities');
 
-    // Obtener detalles de cada actividad para conseguir segment_efforts
+    // STEP 4: Load activities from cache that are OLDER than last sync
+    const [cachedRows] = await pool.query(
+      'SELECT * FROM activities_cache WHERE athlete_id = ? ORDER BY updated_at DESC',
+      [athlete_id]
+    );
+    const cachedActivities = cachedRows || [];
+
+    console.log('[Achievements] Loaded', cachedActivities.length, 'activities from cache');
+
+    // STEP 5: Process NEW activities and INSERT/UPDATE cache
     const achievements = {
-      koms: [],          // is_kom = true
-      top10: [],         // kom_rank entre 1-10
-      podios: [],        // kom_rank entre 1-3
-      localLegends: [],  // effort_count muy alto (simulado como "local legend")
+      koms: [],
+      top10: [],
+      podios: [],
+      localLegends: [],
       total_segments: 0
     };
 
-    // Procesar actividades SECUENCIALMENTE para respetar rate limits
-    // (No usar Promise.all() ya que causa bloqueos de rate limit)
-    const batchSize = 1; // Procesar de 1 en 1
-    for (let i = 0; i < activities.length; i += batchSize) {
-      const batchActivities = activities.slice(i, i + batchSize);
-      
-      for (const activity of batchActivities) {
-        try {
-          // Obtener detalle de actividad con segment_efforts
-          console.log(`[Achievements] Processing activity ${activity.id}/${activities.length}`);
-          const detail = await strava.getActivityById(athlete_id, activity.id, { include_all_efforts: true });
+    // Process only NEW activities (to save API calls)
+    for (const activity of activities) {
+      try {
+        console.log(`[Achievements] Processing NEW activity ${activity.id}/${activities.length}`);
+        const detail = await strava.getActivityById(athlete_id, activity.id, { include_all_efforts: true });
+        
+        if (detail && detail.segment_efforts && Array.isArray(detail.segment_efforts)) {
+          achievements.total_segments += detail.segment_efforts.length;
           
-          if (detail && detail.segment_efforts && Array.isArray(detail.segment_efforts)) {
-            achievements.total_segments += detail.segment_efforts.length;
-            
-            detail.segment_efforts.forEach(effort => {
-              const isKom = Boolean(effort.is_kom) || effort.kom_rank === 1;
-              const segmentInfo = {
-                segment_id: effort.segment ? effort.segment.id : null,
-                segment_name: effort.segment ? effort.segment.name : effort.name,
-                activity_id: activity.id,
-                activity_name: activity.name,
-                activity_date: activity.start_date,
-                elapsed_time: effort.elapsed_time,
-                distance: effort.distance,
-                kom_rank: effort.kom_rank,
-                pr_rank: effort.pr_rank,
-                is_kom: isKom,
-                effort_count: effort.segment?.athlete_segment_stats?.effort_count || 0,
-                pr_elapsed_time: effort.segment?.athlete_segment_stats?.pr_elapsed_time || null,
-                city: effort.segment?.city || null,
-                country: effort.segment?.country || null
-              };
+          // INSERT or UPDATE activity cache
+          await pool.query(
+            `INSERT INTO activities_cache (athlete_id, activity_id, activity_name, activity_date, elapsed_time, distance, type, segment_efforts_data)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+             segment_efforts_data = VALUES(segment_efforts_data),
+             updated_at = NOW()`,
+            [athlete_id, activity.id, activity.name, activity.start_date, activity.elapsed_time, activity.distance, activity.type, JSON.stringify(detail.segment_efforts)]
+          );
+          
+          // Process segment efforts for achievements
+          detail.segment_efforts.forEach(effort => {
+            const isKom = Boolean(effort.is_kom) || effort.kom_rank === 1;
+            const segmentInfo = {
+              segment_id: effort.segment ? effort.segment.id : null,
+              segment_name: effort.segment ? effort.segment.name : effort.name,
+              activity_id: activity.id,
+              activity_name: activity.name,
+              activity_date: activity.start_date,
+              elapsed_time: effort.elapsed_time,
+              distance: effort.distance,
+              kom_rank: effort.kom_rank,
+              pr_rank: effort.pr_rank,
+              is_kom: isKom,
+              effort_count: effort.segment?.athlete_segment_stats?.effort_count || 0,
+              pr_elapsed_time: effort.segment?.athlete_segment_stats?.pr_elapsed_time || null,
+              city: effort.segment?.city || null,
+              country: effort.segment?.country || null
+            };
 
-              // KOMs (tienes el récord del segmento)
-              if (isKom) {
-                achievements.koms.push(segmentInfo);
-              }
-
-              // Top 10 en el ranking del segmento
-              if (effort.kom_rank && effort.kom_rank <= 10) {
-                achievements.top10.push({
-                  ...segmentInfo,
-                  rank: effort.kom_rank
-                });
-              }
-
-              // Podios (top 3)
-              if (effort.kom_rank && effort.kom_rank <= 3) {
-                achievements.podios.push({
-                  ...segmentInfo,
-                  rank: effort.kom_rank
-                });
-              }
-
-              // "Local Legends" simulado: segmentos donde has hecho muchos intentos (>= 10)
-              const effortCount = effort.segment?.athlete_segment_stats?.effort_count || 0;
-              if (effortCount >= 10) {
-                achievements.localLegends.push({
-                  ...segmentInfo,
-                  effort_count: effortCount
-                });
-              }
-            });
-          }
-        } catch (activityError) {
-          console.error('[Achievements] Error fetching activity', activity.id, ':', activityError.message);
-          // Continuar con las demás actividades
+            if (isKom) achievements.koms.push(segmentInfo);
+            if (effort.kom_rank && effort.kom_rank <= 10) {
+              achievements.top10.push({ ...segmentInfo, rank: effort.kom_rank });
+            }
+            if (effort.kom_rank && effort.kom_rank <= 3) {
+              achievements.podios.push({ ...segmentInfo, rank: effort.kom_rank });
+            }
+            const effortCount = effort.segment?.athlete_segment_stats?.effort_count || 0;
+            if (effortCount >= 10) {
+              achievements.localLegends.push({ ...segmentInfo, effort_count: effortCount });
+            }
+          });
         }
+      } catch (activityError) {
+        console.error('[Achievements] Error fetching activity', activity.id, ':', activityError.message);
       }
 
-      // No need for extra batch delay since rate limiter handles it
-      // But add a small delay between batches if needed
-      if (i + batchSize < activities.length && batchDelayMs > 0) {
-        await sleep(Math.max(0, batchDelayMs - 100)); // Reduce since rate limiter adds delay
+      if (batchDelayMs > 0) {
+        await sleep(Math.max(0, batchDelayMs - 100));
       }
     }
 
-    // Eliminar duplicados (el mismo segmento puede aparecer en múltiples actividades)
-    // Mantener solo el mejor logro por segmento
+    // STEP 6: Add cached activities' achievements (older than last sync)
+    cachedActivities.forEach(cached => {
+      try {
+        const segmentEfforts = JSON.parse(cached.segment_efforts_data || '[]');
+        achievements.total_segments += segmentEfforts.length;
+        
+        segmentEfforts.forEach(effort => {
+          const isKom = Boolean(effort.is_kom) || effort.kom_rank === 1;
+          const segmentInfo = {
+            segment_id: effort.segment ? effort.segment.id : null,
+            segment_name: effort.segment ? effort.segment.name : effort.name,
+            activity_id: cached.activity_id,
+            activity_name: cached.activity_name,
+            activity_date: cached.activity_date,
+            elapsed_time: effort.elapsed_time,
+            distance: effort.distance,
+            kom_rank: effort.kom_rank,
+            pr_rank: effort.pr_rank,
+            is_kom: isKom,
+            effort_count: effort.segment?.athlete_segment_stats?.effort_count || 0,
+            pr_elapsed_time: effort.segment?.athlete_segment_stats?.pr_elapsed_time || null,
+            city: effort.segment?.city || null,
+            country: effort.segment?.country || null
+          };
+
+          if (isKom) achievements.koms.push(segmentInfo);
+          if (effort.kom_rank && effort.kom_rank <= 10) {
+            achievements.top10.push({ ...segmentInfo, rank: effort.kom_rank });
+          }
+          if (effort.kom_rank && effort.kom_rank <= 3) {
+            achievements.podios.push({ ...segmentInfo, rank: effort.kom_rank });
+          }
+          const effortCount = effort.segment?.athlete_segment_stats?.effort_count || 0;
+          if (effortCount >= 10) {
+            achievements.localLegends.push({ ...segmentInfo, effort_count: effortCount });
+          }
+        });
+      } catch (e) {
+        console.error('[Achievements] Error parsing cached activity:', e.message);
+      }
+    });
+
+    // STEP 7: Deduplicate and sort results
     const uniqueKoms = Array.from(new Map(
       achievements.koms.map(item => [item.segment_id, item])
     ).values());
@@ -541,37 +600,197 @@ router.get('/achievements', async (req, res) => {
       achievements.localLegends.map(item => [item.segment_id, item])
     ).values()).sort((a, b) => b.effort_count - a.effort_count);
 
+    const finalAchievements = {
+      koms: uniqueKoms,
+      top10: uniqueTop10,
+      podios: uniquePodios,
+      localLegends: uniqueLocalLegends,
+      total_segments: achievements.total_segments
+    };
+
+    // STEP 8: Save to achievements cache
+    await pool.query(
+      `INSERT INTO achievements_cache (athlete_id, koms, top10, podios, local_legends, total_segments, days_range)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+       koms = VALUES(koms),
+       top10 = VALUES(top10),
+       podios = VALUES(podios),
+       local_legends = VALUES(local_legends),
+       total_segments = VALUES(total_segments),
+       cached_at = NOW()`,
+      [athlete_id, JSON.stringify(uniqueKoms), JSON.stringify(uniqueTop10), JSON.stringify(uniquePodios), JSON.stringify(uniqueLocalLegends), achievements.total_segments, days]
+    );
+
+    // STEP 9: Update sync log
+    await pool.query(
+      `INSERT INTO api_sync_log (athlete_id, endpoint, last_sync_timestamp, request_count)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+       last_sync_timestamp = VALUES(last_sync_timestamp),
+       request_count = request_count + 1,
+       cached_at = NOW()`,
+      [athlete_id, 'activities', Math.floor(Date.now() / 1000), activities.length]
+    );
+
     console.log('[Achievements] Results:', {
       koms: uniqueKoms.length,
       top10: uniqueTop10.length,
       podios: uniquePodios.length,
       localLegends: uniqueLocalLegends.length,
-      total_segments: achievements.total_segments
+      total_segments: achievements.total_segments,
+      new_activities: activities.length,
+      cached_activities: cachedActivities.length
     });
 
     const response = {
-      koms: uniqueKoms,
-      top10: uniqueTop10,
-      podios: uniquePodios,
-      localLegends: uniqueLocalLegends,
+      koms: finalAchievements.koms,
+      top10: finalAchievements.top10,
+      podios: finalAchievements.podios,
+      localLegends: finalAchievements.localLegends,
       stats: {
-        total_koms: uniqueKoms.length,
-        total_top10: uniqueTop10.length,
-        total_podios: uniquePodios.length,
-        total_local_legends: uniqueLocalLegends.length,
-        total_segments_analyzed: achievements.total_segments,
-        activities_analyzed: activities.length
+        total_koms: finalAchievements.koms.length,
+        total_top10: finalAchievements.top10.length,
+        total_podios: finalAchievements.podios.length,
+        total_local_legends: finalAchievements.localLegends.length,
+        total_segments_analyzed: finalAchievements.total_segments,
+        new_activities_processed: activities.length,
+        cached_activities_used: cachedActivities.length,
+        total_activities: activities.length + cachedActivities.length,
+        api_calls_saved: cachedActivities.length // Each cached activity = 1 saved API call
       }
     };
 
-    achievementsCache.set(cacheKey, { cached_at: Date.now(), data: response });
-    res.json({ ...response, cached: false });
+    res.json({ ...response, cached: false, cached_at: new Date() });
 
   } catch (err) {
     console.error('[Achievements] Error:', err);
     res.status(err.status || 500).json({ 
       error: String(err), 
       details: err.body || null 
+    });
+  }
+});
+
+// Endpoint para refrescar el cache de achievements
+router.post('/cache/refresh', async (req, res) => {
+  const athlete_id = extractAthleteId(req);
+  console.log('[Cache] Refresh request - athlete_id:', athlete_id);
+  
+  if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id' });
+
+  try {
+    const { getPool } = require('../db');
+    const pool = await getPool();
+    
+    // Clear cache entries for this athlete
+    await pool.query(
+      'DELETE FROM achievements_cache WHERE athlete_id = ?',
+      [athlete_id]
+    );
+
+    // Clear sync log to force full refresh
+    await pool.query(
+      'DELETE FROM api_sync_log WHERE athlete_id = ? AND endpoint = "activities"',
+      [athlete_id]
+    );
+
+    console.log('[Cache] Cleared cache for athlete', athlete_id);
+
+    res.json({
+      success: true,
+      message: 'Cache cleared successfully. Next request will fetch fresh data from Strava.',
+      athlete_id
+    });
+  } catch (err) {
+    console.error('[Cache] Error clearing cache:', err);
+    res.status(500).json({
+      error: 'Error clearing cache',
+      details: err.message
+    });
+  }
+});
+    });
+  }
+});
+
+// Endpoint para ver estadísticas de cache y API usage
+router.get('/cache/stats', async (req, res) => {
+  const athlete_id = extractAthleteId(req);
+  console.log('[Cache] Stats request - athlete_id:', athlete_id);
+  
+  if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id' });
+
+  try {
+    const { getPool } = require('../db');
+    const pool = await getPool();
+    
+    // Get achievements cache info
+    const [achievementRows] = await pool.query(
+      `SELECT koms, top10, podios, local_legends, total_segments, cached_at, 
+              TIMESTAMPDIFF(HOUR, cached_at, NOW()) as age_hours
+       FROM achievements_cache 
+       WHERE athlete_id = ? 
+       ORDER BY cached_at DESC LIMIT 1`,
+      [athlete_id]
+    );
+    const achievementsCache = achievementRows && achievementRows.length > 0 ? achievementRows[0] : null;
+
+    // Get activities cache info
+    const [activityRows] = await pool.query(
+      `SELECT COUNT(*) as count, MAX(updated_at) as latest_update
+       FROM activities_cache 
+       WHERE athlete_id = ?`,
+      [athlete_id]
+    );
+    const activitiesCache = activityRows && activityRows.length > 0 ? activityRows[0] : { count: 0, latest_update: null };
+
+    // Get sync log info
+    const [syncRows] = await pool.query(
+      `SELECT endpoint, last_sync_timestamp, request_count, cached_at
+       FROM api_sync_log 
+       WHERE athlete_id = ?`,
+      [athlete_id]
+    );
+    const syncLog = syncRows || [];
+
+    const rateLimit = strava.getRateLimitStatus();
+
+    res.json({
+      athlete_id,
+      achievements: achievementsCache ? {
+        cached: true,
+        koms_count: JSON.parse(achievementsCache.koms || '[]').length,
+        top10_count: JSON.parse(achievementsCache.top10 || '[]').length,
+        podios_count: JSON.parse(achievementsCache.podios || '[]').length,
+        local_legends_count: JSON.parse(achievementsCache.local_legends || '[]').length,
+        total_segments: achievementsCache.total_segments,
+        age_hours: achievementsCache.age_hours,
+        expires_in_hours: Math.max(0, 24 - achievementsCache.age_hours),
+        cached_at: achievementsCache.cached_at
+      } : { cached: false },
+      activities: {
+        cached_count: activitiesCache.count,
+        latest_update: activitiesCache.latest_update
+      },
+      sync_log: syncLog.map(log => ({
+        endpoint: log.endpoint,
+        last_sync: new Date(log.last_sync_timestamp * 1000),
+        request_count: log.request_count,
+        cached_at: log.cached_at
+      })),
+      rate_limit: {
+        used: rateLimit.remainingRequests,
+        total: rateLimit.requests,
+        percentage_used: rateLimit.percentageUsed,
+        reset_time: new Date(rateLimit.reset * 1000)
+      }
+    });
+  } catch (err) {
+    console.error('[Cache] Error getting stats:', err);
+    res.status(500).json({
+      error: 'Error getting cache stats',
+      details: err.message
     });
   }
 });

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, AsyncStorage } from 'react-native';
 
 type Achievement = {
   segment_id: number;
@@ -20,6 +20,10 @@ type Props = {
   jwt: string | null;
   apiBase?: string;
 };
+
+// Cache settings
+const CACHE_KEY = 'ridemetrics_achievements_cache';
+const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600);
@@ -47,32 +51,97 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
   const [stats, setStats] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'podios' | 'top10' | 'koms' | 'legends'>('podios');
   const [error, setError] = useState<string | null>(null);
+  const [usingCache, setUsingCache] = useState(false);
+
+  // Load cached data
+  const loadCachedAchievements = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const cacheAge = Date.now() - data.timestamp;
+        
+        if (cacheAge < CACHE_EXPIRY_MS) {
+          // Use cached data
+          setKoms(data.koms || []);
+          setTop10(data.top10 || []);
+          setPodios(data.podios || []);
+          setLocalLegends(data.localLegends || []);
+          setStats(data.stats || null);
+          setUsingCache(true);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.error('Error loading cache:', err);
+    }
+    return false;
+  };
+
+  // Save to cache
+  const cacheAchievements = async (data: any) => {
+    try {
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+        ...data,
+        timestamp: Date.now()
+      }));
+    } catch (err) {
+      console.error('Error saving cache:', err);
+    }
+  };
+
+  // Fetch achievements
+  const fetchAchievements = async (forceRefresh = false) => {
+    if (!jwt) return;
+
+    // If not forcing refresh, try cache first
+    if (!forceRefresh) {
+      const hasCached = await loadCachedAchievements();
+      if (hasCached) {
+        setLoading(false);
+        return;
+      }
+    }
+
+    setError(null);
+    setLoading(true);
+    setUsingCache(false);
+
+    try {
+      const res = await fetch(`${apiBase}/strava/achievements`, {
+        headers: { Authorization: `Bearer ${jwt}` }
+      });
+
+      if (!res.ok) {
+        throw new Error('Error al cargar logros');
+      }
+
+      const data = await res.json();
+      setKoms(data.koms || []);
+      setTop10(data.top10 || []);
+      setPodios(data.podios || []);
+      setLocalLegends(data.localLegends || []);
+      setStats(data.stats || null);
+
+      // Cache the results
+      await cacheAchievements(data);
+    } catch (err: any) {
+      console.error('Error fetching achievements:', err);
+      
+      // On error, try to load from cache as fallback
+      const hasCached = await loadCachedAchievements();
+      if (hasCached) {
+        setUsingCache(true);
+      } else {
+        setError(err.message || 'No se pudieron cargar los logros');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!jwt) return;
-    
-    setLoading(true);
-    setError(null);
-    
-    fetch(`${apiBase}/strava/achievements`, {
-      headers: { Authorization: `Bearer ${jwt}` }
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Error al cargar logros');
-        return res.json();
-      })
-      .then(data => {
-        setKoms(data.koms || []);
-        setTop10(data.top10 || []);
-        setPodios(data.podios || []);
-        setLocalLegends(data.localLegends || []);
-        setStats(data.stats || null);
-      })
-      .catch(err => {
-        console.error('Error loading achievements:', err);
-        setError(err.message);
-      })
-      .finally(() => setLoading(false));
+    fetchAchievements();
   }, [jwt, apiBase]);
 
   const renderAchievementCard = (achievement: Achievement, showRank: boolean = false, index: number = 0) => {
@@ -196,7 +265,23 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>🏆 Palmarés</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>🏆 Palmarés</Text>
+          <View style={styles.headerControls}>
+            {usingCache && (
+              <View style={styles.cacheBadge}>
+                <Text style={styles.cacheBadgeText}>📦 Cache</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              onPress={() => fetchAchievements(true)}
+              disabled={loading}
+            >
+              <Text style={styles.refreshBtnText}>⟳</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         {stats && (
           <View style={styles.statsContainer}>
             <View style={styles.statBox}>
@@ -270,11 +355,47 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cacheBadge: {
+    backgroundColor: '#f0f9ff',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#0284c7',
+  },
+  cacheBadgeText: {
+    fontSize: 11,
+    color: '#0284c7',
+    fontWeight: '600',
+  },
+  refreshBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#4299e1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  refreshBtnText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1e293b',
-    marginBottom: 12,
   },
   statsContainer: {
     flexDirection: 'row',

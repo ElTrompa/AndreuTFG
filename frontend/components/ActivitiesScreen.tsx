@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
 import Svg, { Rect, G, Text as SvgText } from 'react-native-svg';
+import { cacheService, CACHE_KEYS, CACHE_TTL } from '../services/cacheService';
 
 type Props = {
   jwt: string | null;
@@ -70,6 +71,7 @@ export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001
   const [loading, setLoading] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
   const [streamsCache, setStreamsCache] = useState<Record<number, any>>({});
+  const [usingCache, setUsingCache] = useState(false);
 
   useEffect(()=>{
     // enable LayoutAnimation on Android
@@ -77,13 +79,52 @@ export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
     if (!jwt) return;
-    setLoading(true);
-    fetch(`${apiBase}/strava/activities`, { headers: { Authorization: `Bearer ${jwt}` } })
-      .then(r=>r.json())
-      .then(d=>{ if (Array.isArray(d)) setActivities(d); else if (d && d.ok && Array.isArray(d.data)) setActivities(d.data); else if (d && Array.isArray(d)) setActivities(d); })
-      .catch(e=>{})
-      .finally(()=>setLoading(false));
+    loadActivities();
   }, [jwt]);
+
+  const loadActivities = async () => {
+    setLoading(true);
+    try {
+      // Try cache first
+      const cacheKey = CACHE_KEYS.ACTIVITIES(profile?.athlete_id || 'unknown');
+      const cached = await cacheService.get<any[]>(cacheKey, CACHE_TTL.ACTIVITIES);
+      
+      if (cached && Array.isArray(cached)) {
+        console.log('[ActivitiesScreen] Using cached activities');
+        setActivities(cached);
+        setUsingCache(true);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch from API
+      console.log('[ActivitiesScreen] Fetching activities from API');
+      const response = await fetch(`${apiBase}/strava/activities`, { 
+        headers: { Authorization: `Bearer ${jwt}` } 
+      });
+      const data = await response.json();
+      
+      let activitiesList: any[] = [];
+      if (Array.isArray(data)) {
+        activitiesList = data;
+      } else if (data && data.ok && Array.isArray(data.data)) {
+        activitiesList = data.data;
+      } else if (data && Array.isArray(data)) {
+        activitiesList = data;
+      }
+      
+      if (activitiesList.length > 0) {
+        await cacheService.set(cacheKey, activitiesList);
+        setUsingCache(false);
+      }
+      
+      setActivities(activitiesList);
+    } catch (e) {
+      console.error('[ActivitiesScreen] Error loading activities:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadStreams = async (id:number) => {
     if (!jwt) return;

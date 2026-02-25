@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { SvgXml } from 'react-native-svg';
+import { cacheService, CACHE_KEYS, CACHE_TTL } from '../services/cacheService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -39,6 +40,7 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
   const [loading, setLoading] = useState(false);
   const [pmcData, setPmcData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usingCache, setUsingCache] = useState(false);
 
 
   useEffect(() => {
@@ -57,11 +59,24 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
       return;
     }
     
-    console.log('[loadPMCData] Starting request to', `${apiBase}/strava/pmc?view=all&days=730`);
+    console.log('[loadPMCData] Starting request...');
     setLoading(true);
     setError(null);
 
     try {
+      // Try cache first
+      const cacheKey = CACHE_KEYS.PMC(profile?.athlete_id || 'unknown');
+      const cached = await cacheService.get<any>(cacheKey, CACHE_TTL.ACTIVITIES);
+      
+      if (cached) {
+        console.log('[loadPMCData] Using cached PMC data');
+        setPmcData(cached);
+        setUsingCache(true);
+        setLoading(false);
+        return;
+      }
+
+      console.log('[loadPMCData] No cache available, fetching from API');
       const response = await fetch(`${apiBase}/strava/pmc?view=all&days=730`, {
         headers: { Authorization: `Bearer ${jwt}` }
       });
@@ -69,31 +84,18 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
       console.log('[loadPMCData] Response status:', response.status);
 
       if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        let errorMessage = `Server error: ${response.status}`;
-        
-        if (contentType?.includes('application/json')) {
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData.error || errorMessage;
-          } catch (e) {
-            // Could not parse JSON error
-          }
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType?.includes('application/json')) {
-        throw new Error('Server returned invalid content type: ' + (contentType || 'unknown'));
+        throw new Error(`Server error: ${response.status}`);
       }
 
       const data = await response.json();
       console.log('[loadPMCData] Success! Got data with daily entries:', data.daily?.length || 0);
+      
+      // Cache the result
+      await cacheService.set(cacheKey, data);
+      setUsingCache(false);
       setPmcData(data);
     } catch (err: any) {
-      console.error('[loadPMCData]error:', err);
+      console.error('[loadPMCData] error:', err);
       setError(err.message || 'Error al cargar datos');
     } finally {
       setLoading(false);
