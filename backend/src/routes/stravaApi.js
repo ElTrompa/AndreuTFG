@@ -521,7 +521,6 @@ router.get('/achievements', async (req, res) => {
       if (i + batchSize < activities.length && batchDelayMs > 0) {
         await sleep(Math.max(0, batchDelayMs - 100)); // Reduce since rate limiter adds delay
       }
-      }
     }
 
     // Eliminar duplicados (el mismo segmento puede aparecer en múltiples actividades)
