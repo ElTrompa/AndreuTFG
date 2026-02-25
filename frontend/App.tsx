@@ -274,7 +274,7 @@ export default function App() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <SvgXml xml={logoXml} width={120} height={120} style={styles.logo} />
-      <Text style={styles.title}>TFGandreu</Text>
+      <Text style={styles.title}>RideMetrics</Text>
       <Text style={styles.subtitle}>Entrenamiento ciclista — Frontend Expo (TypeScript)</Text>
 
       {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}

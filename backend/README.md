@@ -1,4 +1,4 @@
-# Backend — TFGandreu (Node.js + Express)
+# Backend — RideMetrics (Node.js + Express)
 
 Rápido inicio para el backend que maneja la autenticación con Strava.
 

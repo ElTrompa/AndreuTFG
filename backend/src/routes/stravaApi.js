@@ -7,6 +7,13 @@ const { getProfile } = require('../models/profiles');
 const { generateAdvancedAnalytics, calculateTSS, calculateIntensityFactor } = require('../services/analytics');
 const { calculatePMC, getWeeklySummary, getMonthlySummary, groupByWeek, groupByMonth } = require('../services/pmc');
 
+const achievementsCache = new Map();
+const ACHIEVEMENTS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function extractAthleteId(req) {
   // 1) If a JWT is provided as Bearer token, decode it
   const auth = req.headers.authorization || '';
@@ -391,17 +398,32 @@ router.get('/achievements', async (req, res) => {
   if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id' });
 
   try {
-    // Obtener actividades recientes (últimos 6 meses para tener buen rango de datos)
-    const sixMonthsAgo = Math.floor((Date.now() / 1000) - (180 * 86400));
-    const perPage = 100;
-    const maxPages = 10;
+    // Obtener actividades recientes (por defecto 6 meses, pero configurable)
+    const daysParam = req.query.days;
+    const days = daysParam === 'all' ? 0 : Number(daysParam) || 180;
+    const afterTimestamp = days > 0
+      ? Math.floor((Date.now() / 1000) - (days * 86400))
+      : null;
+    const perPage = Number(req.query.per_page) || 100;
+    const maxPages = Number(req.query.max_pages) || 10;
+    const batchDelayMs = Number(req.query.batch_delay_ms) || 300;
+    const force = String(req.query.force || '').toLowerCase() === 'true' || req.query.force === '1';
+
+    const cacheKey = `${athlete_id}:${daysParam || 180}:${perPage}:${maxPages}`;
+    const cached = achievementsCache.get(cacheKey);
+    if (cached && !force) {
+      const ageMs = Date.now() - cached.cached_at;
+      if (ageMs < ACHIEVEMENTS_CACHE_TTL_MS) {
+        return res.json({ ...cached.data, cached: true, cached_at: cached.cached_at });
+      }
+    }
 
     let activities = [];
     let page = 1;
     
     while (page <= maxPages) {
       const batch = await strava.getActivities(athlete_id, {
-        after: sixMonthsAgo,
+        after: afterTimestamp || undefined,
         per_page: perPage,
         page
       });
@@ -423,75 +445,83 @@ router.get('/achievements', async (req, res) => {
       total_segments: 0
     };
 
-    // Procesar actividades en paralelo (limitado para no sobrecargar la API)
-    const batchSize = 5;
+    // Procesar actividades SECUENCIALMENTE para respetar rate limits
+    // (No usar Promise.all() ya que causa bloqueos de rate limit)
+    const batchSize = 1; // Procesar de 1 en 1
     for (let i = 0; i < activities.length; i += batchSize) {
       const batchActivities = activities.slice(i, i + batchSize);
       
-      await Promise.all(
-        batchActivities.map(async (activity) => {
-          try {
-            // Obtener detalle de actividad con segment_efforts
-            const detail = await strava.getActivityById(athlete_id, activity.id, { include_all_efforts: true });
+      for (const activity of batchActivities) {
+        try {
+          // Obtener detalle de actividad con segment_efforts
+          console.log(`[Achievements] Processing activity ${activity.id}/${activities.length}`);
+          const detail = await strava.getActivityById(athlete_id, activity.id, { include_all_efforts: true });
+          
+          if (detail && detail.segment_efforts && Array.isArray(detail.segment_efforts)) {
+            achievements.total_segments += detail.segment_efforts.length;
             
-            if (detail && detail.segment_efforts && Array.isArray(detail.segment_efforts)) {
-              achievements.total_segments += detail.segment_efforts.length;
-              
-              detail.segment_efforts.forEach(effort => {
-                const segmentInfo = {
-                  segment_id: effort.segment ? effort.segment.id : null,
-                  segment_name: effort.segment ? effort.segment.name : effort.name,
-                  activity_id: activity.id,
-                  activity_name: activity.name,
-                  activity_date: activity.start_date,
-                  elapsed_time: effort.elapsed_time,
-                  distance: effort.distance,
-                  kom_rank: effort.kom_rank,
-                  pr_rank: effort.pr_rank,
-                  is_kom: effort.is_kom,
-                  effort_count: effort.segment?.athlete_segment_stats?.effort_count || 0,
-                  pr_elapsed_time: effort.segment?.athlete_segment_stats?.pr_elapsed_time || null,
-                  city: effort.segment?.city || null,
-                  country: effort.segment?.country || null
-                };
+            detail.segment_efforts.forEach(effort => {
+              const isKom = Boolean(effort.is_kom) || effort.kom_rank === 1;
+              const segmentInfo = {
+                segment_id: effort.segment ? effort.segment.id : null,
+                segment_name: effort.segment ? effort.segment.name : effort.name,
+                activity_id: activity.id,
+                activity_name: activity.name,
+                activity_date: activity.start_date,
+                elapsed_time: effort.elapsed_time,
+                distance: effort.distance,
+                kom_rank: effort.kom_rank,
+                pr_rank: effort.pr_rank,
+                is_kom: isKom,
+                effort_count: effort.segment?.athlete_segment_stats?.effort_count || 0,
+                pr_elapsed_time: effort.segment?.athlete_segment_stats?.pr_elapsed_time || null,
+                city: effort.segment?.city || null,
+                country: effort.segment?.country || null
+              };
 
-                // KOMs (tienes el récord del segmento)
-                if (effort.is_kom) {
-                  achievements.koms.push(segmentInfo);
-                }
+              // KOMs (tienes el récord del segmento)
+              if (isKom) {
+                achievements.koms.push(segmentInfo);
+              }
 
-                // Top 10 en el ranking del segmento
-                if (effort.kom_rank && effort.kom_rank <= 10) {
-                  achievements.top10.push({
-                    ...segmentInfo,
-                    rank: effort.kom_rank
-                  });
-                }
+              // Top 10 en el ranking del segmento
+              if (effort.kom_rank && effort.kom_rank <= 10) {
+                achievements.top10.push({
+                  ...segmentInfo,
+                  rank: effort.kom_rank
+                });
+              }
 
-                // Podios (top 3)
-                if (effort.kom_rank && effort.kom_rank <= 3) {
-                  achievements.podios.push({
-                    ...segmentInfo,
-                    rank: effort.kom_rank
-                  });
-                }
+              // Podios (top 3)
+              if (effort.kom_rank && effort.kom_rank <= 3) {
+                achievements.podios.push({
+                  ...segmentInfo,
+                  rank: effort.kom_rank
+                });
+              }
 
-                // "Local Legends" simulado: segmentos donde has hecho muchos intentos (>= 10)
-                const effortCount = effort.segment?.athlete_segment_stats?.effort_count || 0;
-                if (effortCount >= 10) {
-                  achievements.localLegends.push({
-                    ...segmentInfo,
-                    effort_count: effortCount
-                  });
-                }
-              });
-            }
-          } catch (activityError) {
-            console.error('[Achievements] Error fetching activity', activity.id, ':', activityError.message);
-            // Continuar con las demás actividades
+              // "Local Legends" simulado: segmentos donde has hecho muchos intentos (>= 10)
+              const effortCount = effort.segment?.athlete_segment_stats?.effort_count || 0;
+              if (effortCount >= 10) {
+                achievements.localLegends.push({
+                  ...segmentInfo,
+                  effort_count: effortCount
+                });
+              }
+            });
           }
-        })
-      );
+        } catch (activityError) {
+          console.error('[Achievements] Error fetching activity', activity.id, ':', activityError.message);
+          // Continuar con las demás actividades
+        }
+      }
+
+      // No need for extra batch delay since rate limiter handles it
+      // But add a small delay between batches if needed
+      if (i + batchSize < activities.length && batchDelayMs > 0) {
+        await sleep(Math.max(0, batchDelayMs - 100)); // Reduce since rate limiter adds delay
+      }
+      }
     }
 
     // Eliminar duplicados (el mismo segmento puede aparecer en múltiples actividades)
@@ -520,7 +550,7 @@ router.get('/achievements', async (req, res) => {
       total_segments: achievements.total_segments
     });
 
-    res.json({
+    const response = {
       koms: uniqueKoms,
       top10: uniqueTop10,
       podios: uniquePodios,
@@ -533,7 +563,10 @@ router.get('/achievements', async (req, res) => {
         total_segments_analyzed: achievements.total_segments,
         activities_analyzed: activities.length
       }
-    });
+    };
+
+    achievementsCache.set(cacheKey, { cached_at: Date.now(), data: response });
+    res.json({ ...response, cached: false });
 
   } catch (err) {
     console.error('[Achievements] Error:', err);
@@ -542,6 +575,19 @@ router.get('/achievements', async (req, res) => {
       details: err.body || null 
     });
   }
+});
+
+// Endpoint para verificar el estado de rate limiting
+router.get('/rate-limit-status', (req, res) => {
+  const status = strava.getRateLimitStatus();
+  res.json({
+    ...status,
+    message: status.percentageUsed > 90 
+      ? 'WARNING: High API usage, throttling requests'
+      : status.percentageUsed > 70
+      ? 'Caution: API usage is moderate'
+      : 'OK: API usage is healthy'
+  });
 });
 
 module.exports = router;

@@ -1,12 +1,12 @@
-﻿#  TFGandreu  Aplicación de Análisis de Entrenamiento Ciclista
+﻿# 🚴 RideMetrics — Aplicación de Análisis de Entrenamiento Ciclista
 
-##  Descripción
+## Descripción
 
-TFGandreu (RideMetrics) es una aplicación móvil multiplataforma para el análisis y la mejora del rendimiento ciclista, integrada con la API de Strava. Permite visualizar entrenamientos, analizar la carga semanal y generar proyecciones de rendimiento (por ejemplo, kilometraje anual estimado).
+**RideMetrics** es una aplicación móvil multiplataforma para el análisis y la mejora del rendimiento ciclista, integrada con la API de Strava. Permite visualizar entrenamientos, analizar la carga semanal y generar proyecciones de rendimiento (por ejemplo, kilometraje anual estimado).
 
 Proyecto desarrollado como parte del Proyecto Intermodular 2 del ciclo formativo de grado superior en Desarrollo de Aplicaciones Multiplataforma (DAM) en Florida Campus Alzira.
 
-##  Objetivos
+## Objetivos
 
 - Integrar datos reales de entrenamientos mediante Strava.
 - Visualizar métricas deportivas de forma clara e intuitiva.
@@ -15,31 +15,11 @@ Proyecto desarrollado como parte del Proyecto Intermodular 2 del ciclo formativo
 - Aplicar una arquitectura backend + frontend real.
 - Trabajar bajo metodología SCRUM y documentar el proyecto profesionalmente.
 
-##  Motivación
-
-Muchas plataformas avanzadas son de pago. Este proyecto busca ofrecer una alternativa gratuita, intuitiva, multiplataforma y orientada a la mejora continua del deportista.
-#  TFGandreu  Aplicación de Análisis de Entrenamiento Ciclista
-
-##  Descripción
-
-TFGandreu (RideMetrics) es una aplicación móvil multiplataforma para el análisis y la mejora del rendimiento ciclista, integrada con la API de Strava. Permite visualizar entrenamientos, analizar la carga semanal y generar proyecciones de rendimiento (por ejemplo, kilometraje anual estimado).
-
-Proyecto desarrollado como parte del Proyecto Intermodular 2 del ciclo formativo de grado superior en Desarrollo de Aplicaciones Multiplataforma (DAM) en Florida Campus Alzira.
-
-##  Objetivos
-
-- Integrar datos reales de entrenamientos mediante Strava.
-- Visualizar métricas deportivas de forma clara e intuitiva.
-- Analizar forma física, fatiga y carga de entrenamiento.
-- Generar proyecciones de rendimiento a medio y largo plazo.
-- Aplicar una arquitectura backend + frontend real.
-- Trabajar bajo metodología SCRUM y documentar el proyecto profesionalmente.
-
-##  Motivación
+## Motivación
 
 Muchas plataformas avanzadas son de pago. Este proyecto busca ofrecer una alternativa gratuita, intuitiva, multiplataforma y orientada a la mejora continua del deportista.
 
-##  Alcance (contexto académico)
+## Alcance (contexto académico)
 
 El proyecto cumple los requisitos técnicos del Proyecto Intermodular DAM:
 
@@ -47,7 +27,7 @@ El proyecto cumple los requisitos técnicos del Proyecto Intermodular DAM:
 - Frontend: App móvil con React Native + Expo (TypeScript), diseño adaptable móvil/tablet, prototipado en Figma.
 - Requisitos comunes: GitHub, SCRUM, Trello, desarrollo en inglés (app), entorno dockerizado.
 
-##  Tecnologías
+## Tecnologías
 
 - Frontend: React Native, TypeScript, Expo
 - Backend: Node.js, Express.js, MySQL
@@ -55,31 +35,32 @@ El proyecto cumple los requisitos técnicos del Proyecto Intermodular DAM:
 - APIs externas: Strava API (OAuth 2.0)
 - Herramientas: GitHub, Trello, Figma
 
-##  Arquitectura
+## Arquitectura
 
-App React Native  Backend API REST  Base de datos (MySQL)  Strava API
+App React Native → Backend API REST → Base de datos (MySQL) → Strava API
 
-##  Funcionalidades principales
+## Funcionalidades principales
 
 - Autenticación OAuth con Strava (y opción manual de token para un único usuario)
 - Visualización de entrenamientos y métricas
 - Gráficas de progreso (semanal/mensual)
 - Análisis de carga y forma física
 - Proyección de rendimiento anual
-- Visualización de potencias por duraciones (5s  2h) en formato hexagonal
+- Visualización de potencias por duraciones (5s — 2h) en formato hexagonal
 
-##  Instalación
+## Instalación
 
 ### Requisitos
-- Node.js  18
+
+- Node.js ≥ 18
 - Docker & Docker Compose (opcional)
 - Cuenta de desarrollador en Strava (para integración completa)
 
 ### Instalación local
 
 ```powershell
-git clone https://github.com/usuario/TFGandreu.git
-cd TFGandreu
+git clone https://github.com/usuario/RideMetrics.git
+cd RideMetrics
 
 # Backend
 cd backend
@@ -89,7 +70,7 @@ npm run dev
 # Frontend (en otra terminal)
 cd ../frontend
 npm install
-npm run start
+npm start
 ```
 
 ### Con Docker
@@ -98,7 +79,7 @@ npm run start
 docker-compose up --build
 ```
 
-##  Configuración
+## Configuración
 
 Crear un archivo `.env` en `backend/` con las siguientes variables (ejemplo):
 
@@ -111,24 +92,24 @@ DB_URL=mysql://user:pass@host:3306/dbname
 PORT=3000
 ```
 
-##  Uso
+## Uso
 
 1. Inicia el backend y frontend.
 2. Inicia sesión con Strava (o usa el flujo manual de token para un único usuario).
 3. Autoriza el acceso a los entrenamientos.
 4. Consulta estadísticas y proyecciones desde el panel principal.
 
-##  Estructura del proyecto
+## Estructura del proyecto
 
 ```
-TFGandreu/
- frontend/
- backend/
- docker-compose.yml
- README.md
+RideMetrics/
+├── frontend/
+├── backend/
+├── docker-compose.yml
+└── README.md
 ```
 
-##  Testing
+## Testing
 
 ```powershell
 npm test
@@ -136,13 +117,13 @@ npm test
 
 (Opcional: Jest / Detox)
 
-##  Metodología
+## Metodología
 
 - Metodología SCRUM
 - Gestión con Trello
 - Control de versiones con GitHub
 
-##  Roadmap
+## Roadmap
 
 - Autenticación Strava
 - Visualización de entrenamientos
@@ -154,40 +135,37 @@ npm test
 
 ---
 
-##  Paleta de colores (diseño)
+## Paleta de colores (diseño)
 
-###  Neutrales (UI limpia tipo dashboard deportivo)
+### Neutrales (UI limpia tipo dashboard deportivo)
 
-Uso | Color
-:---|:-----
-Fondo claro | `#F6F8FA`
-Tarjetas | `#FFFFFF`
-Texto principal | `#1F2933`
-Texto secundario | `#6B7280`
-Bordes / divisores | `#E5E7EB`
+| Uso | Color |
+|:---|:-----|
+| Fondo claro | `#F6F8FA` |
+| Tarjetas | `#FFFFFF` |
+| Texto principal | `#1F2933` |
+| Texto secundario | `#6B7280` |
+| Bordes / divisores | `#E5E7EB` |
 
-###  Semánticos (estados)
+### Semánticos (estados)
 
-Estado | Color
-:---|:-----
-Éxito | `#2ECC71`
-Advertencia | `#F39C12`
-Error | `#E74C3C`
-Info | `#1E88E5`
+| Estado | Color |
+|:---|:-----|
+| Éxito | `#2ECC71` |
+| Advertencia | `#F39C12` |
+| Error | `#E74C3C` |
+| Info | `#1E88E5` |
 
-###  Modo oscuro (opcional recomendado)
+### Modo oscuro (opcional recomendado)
 
-Uso | Color
-:---|:-----
-Fondo principal | `#0F172A`
-Tarjetas | `#1E293B`
-Texto principal | `#F8FAFC`
-Texto secundario | `#94A3B8`
-Primario | `#38BDF8`
-Secundario | `#4ADE80`
-
-
-Si quieres que adapte componentes o un tema global con estas variables (React Native / Expo Theme), dime y creo el archivo de tema y un ejemplo de uso en `frontend/`.
+| Uso | Color |
+|:---|:-----|
+| Fondo principal | `#0F172A` |
+| Tarjetas | `#1E293B` |
+| Texto principal | `#F8FAFC` |
+| Texto secundario | `#94A3B8` |
+| Primario | `#38BDF8` |
+| Secundario | `#4ADE80` |
 
 ## UI — Logo and theme integration
 
@@ -198,7 +176,7 @@ Comandos para probar rápido (desde la carpeta `frontend`):
 
 ```powershell
 npm install
-npm run start
+npm start
 ```
 
 Si quieres que adapte más pantallas (lista de actividades, detalle con mapa y streams), dime qué vista hago primero.

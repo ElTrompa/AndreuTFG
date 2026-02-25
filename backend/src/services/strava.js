@@ -1,9 +1,24 @@
 const fetch = global.fetch || require('node-fetch');
 const { getAthleteById, refreshAthleteToken } = require('../models/tokens');
+const { RateLimiter } = require('./rateLimit');
 
 const STRAVA_API_BASE = 'https://www.strava.com/api/v3';
 
+// Initialize rate limiter (600 requests per 15 minutes)
+const rateLimiter = new RateLimiter({
+  requestsPerWindow: 600,
+  windowMs: 15 * 60 * 1000,
+  minDelayMs: 150 // 150ms minimum between requests
+});
+
 async function apiRequestWithToken(athlete_id, path, opts = {}) {
+  // Queue request through rate limiter
+  return rateLimiter.enqueue(async () => {
+    return await executeRequest(athlete_id, path, opts);
+  });
+}
+
+async function executeRequest(athlete_id, path, opts = {}) {
   console.log(`[STRAVA_API] Requesting ${path} for athlete ${athlete_id}`);
   const athlete = await getAthleteById(athlete_id);
   if (!athlete) {
@@ -27,6 +42,9 @@ async function apiRequestWithToken(athlete_id, path, opts = {}) {
   let resp = await fetch(url, Object.assign({}, opts, { headers }));
   console.log(`[STRAVA_API] Initial response status: ${resp.status}`);
   
+  // Update rate limit info from response headers
+  rateLimiter.updateFromHeaders(resp.headers.raw?.());
+  
   if (resp.status === 401) {
     console.log(`[STRAVA_API] Got 401 - attempting token refresh for athlete ${athlete_id}`);
     // Try refresh and retry once
@@ -48,12 +66,37 @@ async function apiRequestWithToken(athlete_id, path, opts = {}) {
   const text = await resp.text();
   let data;
   try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+  
+  // Update rate limit info from response headers - handle both node-fetch and browser fetch
+  if (resp.headers) {
+    const headersObj = {};
+    if (typeof resp.headers.raw === 'function') {
+      // node-fetch style
+      const raw = resp.headers.raw();
+      Object.assign(headersObj, raw);
+    } else if (typeof resp.headers.get === 'function') {
+      // Standard fetch API
+      const usage = resp.headers.get('x-ratelimit-usage');
+      const limit = resp.headers.get('x-ratelimit-limit');
+      if (usage) headersObj['x-ratelimit-usage'] = [usage];
+      if (limit) headersObj['x-ratelimit-limit'] = [limit];
+    }
+    if (Object.keys(headersObj).length > 0) {
+      rateLimiter.updateFromHeaders(headersObj);
+    }
+  }
+  
   if (!resp.ok) {
     console.error(`[STRAVA_API] API error - status: ${resp.status}, message:`, data?.message || 'unknown');
     const msg = data && data.message ? data.message : resp.statusText || 'Strava API error';
     const err = new Error(msg);
     err.status = resp.status;
     err.body = data;
+    // Extract retry-after header if present
+    const retryAfter = resp.headers.get?.('retry-after') || resp.headers['retry-after'];
+    if (retryAfter) {
+      err.retryAfter = retryAfter;
+    }
     throw err;
   }
   console.log(`[STRAVA_API] Success for ${path}`);
@@ -98,5 +141,6 @@ module.exports = {
   getActivityById,
   getAthleteZones,
   getAthleteStats,
-  apiRequestWithToken 
+  apiRequestWithToken,
+  getRateLimitStatus: () => rateLimiter.getStatus()
 };

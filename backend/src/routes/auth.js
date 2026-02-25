@@ -4,8 +4,8 @@ const router = express.Router();
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
 const STRAVA_REDIRECT_URI = process.env.STRAVA_REDIRECT_URI;
-// URI scheme or URL where the frontend app can receive the JWT (e.g. "tfgandreu://auth" or a web URL)
-const FRONTEND_CALLBACK_URI = process.env.FRONTEND_CALLBACK_URI || 'tfgandreu://auth';
+// URI scheme or URL where the frontend app can receive the JWT (e.g. "ridemetrics://auth" or a web URL)
+const FRONTEND_CALLBACK_URI = process.env.FRONTEND_CALLBACK_URI || 'ridemetrics://auth';
 
 const { saveOrUpdateAthleteToken } = require('../models/tokens');
 const { refreshAthleteToken, getAthleteById, getAthletesToRefresh } = require('../models/tokens');

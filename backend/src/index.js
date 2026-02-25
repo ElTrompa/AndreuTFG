@@ -10,10 +10,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => res.json({ok: true, message: 'TFGandreu backend running'}));
+app.get('/', (req, res) => res.json({ok: true, message: 'RideMetrics backend running'}));
 app.use('/auth', authRoutes);
 app.use('/strava', require('./routes/stravaApi'));
 app.use('/profile', require('./routes/profile'));
+app.use('/advanced', require('./routes/advanced'));
+app.use('/specialized', require('./routes/specialized'));
 
 // Initialize database tables
 async function initDatabase() {

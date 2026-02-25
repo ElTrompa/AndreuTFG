@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "TFGandreu",
-    "slug": "tfgandreu-frontend",
+    "name": "RideMetrics",
+    "slug": "ridemetrics-frontend",
     "version": "1.0.0",
-    "scheme": "tfgandreu",
+    "scheme": "ridemetrics",
     "platforms": ["ios", "android", "web"],
     "web": {
       "output": "single"
