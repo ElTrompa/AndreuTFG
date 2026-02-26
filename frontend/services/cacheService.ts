@@ -73,7 +73,7 @@ class CacheService {
     try {
       const keys = await AsyncStorage.getAllKeys();
       const toRemove = keys.filter(key => key.includes(pattern));
-      await AsyncStorage.multiRemove(toRemove);
+      await Promise.all(toRemove.map(key => AsyncStorage.removeItem(key)));
       console.log(`[Cache] CLEARED PATTERN: ${pattern} (${toRemove.length} entries)`);
     } catch (error) {
       console.error(`[Cache] Error clearing pattern ${pattern}:`, error);

@@ -168,7 +168,7 @@ export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001
         const { carbsPct, fatsPct } = estimateCaloriesBreakdown(avg, avgHR, profile);
 
         return (
-          <View key={id} style={styles.card}>
+          <View style={styles.card}>
             <TouchableOpacity onPress={() => onSelectActivity(id)}>
               <View style={styles.rowTop}>
                 <Text style={styles.name}>{act.name}</Text>
@@ -241,7 +241,7 @@ function renderSparkline(values:number[], width:number, height:number, offsetX:n
     const h = Math.round((v/max) * height);
     const x = offsetX + i;
     const y = (height + 20) - h;
-    bars.push(<Rect key={'b'+i} x={x} y={y} width={1} height={h} fill="#2b9aa3" />);
+    bars.push(<Rect x={x} y={y} width={1} height={h} fill="#2b9aa3" />);
   }
   return bars;
 }
@@ -263,7 +263,7 @@ function renderHistogram(values:number[], buckets:number, width:number, barHeigh
     const h = Math.round((c/maxCount) * barHeight);
     const x = 20 + i * bucketWidth;
     const y = offsetY + (barHeight - h);
-    return <Rect key={'h'+i} x={x} y={y} width={Math.max(6, Math.round(bucketWidth-4))} height={h} fill={'#6bd6a9'} rx={3} />;
+    return <Rect x={x} y={y} width={Math.max(6, Math.round(bucketWidth-4))} height={h} fill={'#6bd6a9'} rx={3} />;
   });
   return bars;
 }

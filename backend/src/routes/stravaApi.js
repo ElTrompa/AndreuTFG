@@ -14,6 +14,13 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Convert ISO 8601 date to MySQL DATETIME format
+function toMySQLDateTime(isoDate) {
+  if (!isoDate) return null;
+  // Remove 'Z' and replace 'T' with space: '2025-08-30T08:37:17Z' -> '2025-08-30 08:37:17'
+  return isoDate.replace('T', ' ').replace('Z', '').substring(0, 19);
+}
+
 function extractAthleteId(req) {
   // 1) If a JWT is provided as Bearer token, decode it
   const auth = req.headers.authorization || '';
@@ -402,7 +409,6 @@ router.get('/achievements', async (req, res) => {
     const pool = await getPool();
     const daysParam = req.query.days;
     const days = daysParam === 'all' ? 0 : Number(daysParam) || 180;
-    const batchDelayMs = Number(req.query.batch_delay_ms) || 300;
     const force = String(req.query.force || '').toLowerCase() === 'true' || req.query.force === '1';
 
     // STEP 1: Verificar caché en BD (más eficiente que memory)
@@ -432,6 +438,8 @@ router.get('/achievements', async (req, res) => {
       : null;
     const perPage = Number(req.query.per_page) || 100;
     const maxPages = Number(req.query.max_pages) || 10;
+    const maxActivitiesPerSync = Number(req.query.max_activities) || 50; // Limit to avoid rate limits
+    const batchDelayMs = Number(req.query.batch_delay) || 500; // 500ms delay between requests
 
     // STEP 2: Get last sync time to fetch only NEW activities
     const [syncRows] = await pool.query(
@@ -462,6 +470,12 @@ router.get('/achievements', async (req, res) => {
 
     console.log('[Achievements] Fetched', activities.length, 'NEW activities');
 
+    // Limit activities to prevent rate limit exhaustion
+    const limitedActivities = activities.slice(0, maxActivitiesPerSync);
+    if (activities.length > maxActivitiesPerSync) {
+      console.log(`[Achievements] Limiting processing to ${maxActivitiesPerSync} activities (${activities.length - maxActivitiesPerSync} will be processed next time)`);
+    }
+
     // STEP 4: Load activities from cache that are OLDER than last sync
     const [cachedRows] = await pool.query(
       'SELECT * FROM activities_cache WHERE athlete_id = ? ORDER BY updated_at DESC',
@@ -481,9 +495,9 @@ router.get('/achievements', async (req, res) => {
     };
 
     // Process only NEW activities (to save API calls)
-    for (const activity of activities) {
+    for (const activity of limitedActivities) {
       try {
-        console.log(`[Achievements] Processing NEW activity ${activity.id}/${activities.length}`);
+        console.log(`[Achievements] Processing NEW activity ${activity.id}/${limitedActivities.length}`);
         const detail = await strava.getActivityById(athlete_id, activity.id, { include_all_efforts: true });
         
         if (detail && detail.segment_efforts && Array.isArray(detail.segment_efforts)) {
@@ -496,7 +510,7 @@ router.get('/achievements', async (req, res) => {
              ON DUPLICATE KEY UPDATE
              segment_efforts_data = VALUES(segment_efforts_data),
              updated_at = NOW()`,
-            [athlete_id, activity.id, activity.name, activity.start_date, activity.elapsed_time, activity.distance, activity.type, JSON.stringify(detail.segment_efforts)]
+            [athlete_id, activity.id, activity.name, toMySQLDateTime(activity.start_date), activity.elapsed_time, activity.distance, activity.type, JSON.stringify(detail.segment_efforts)]
           );
           
           // Process segment efforts for achievements
@@ -507,7 +521,7 @@ router.get('/achievements', async (req, res) => {
               segment_name: effort.segment ? effort.segment.name : effort.name,
               activity_id: activity.id,
               activity_name: activity.name,
-              activity_date: activity.start_date,
+              activity_date: toMySQLDateTime(activity.start_date),
               elapsed_time: effort.elapsed_time,
               distance: effort.distance,
               kom_rank: effort.kom_rank,
@@ -536,8 +550,9 @@ router.get('/achievements', async (req, res) => {
         console.error('[Achievements] Error fetching activity', activity.id, ':', activityError.message);
       }
 
+      // Add delay between requests to avoid rate limits
       if (batchDelayMs > 0) {
-        await sleep(Math.max(0, batchDelayMs - 100));
+        await sleep(batchDelayMs);
       }
     }
 
@@ -707,9 +722,6 @@ router.post('/cache/refresh', async (req, res) => {
     res.status(500).json({
       error: 'Error clearing cache',
       details: err.message
-    });
-  }
-});
     });
   }
 });

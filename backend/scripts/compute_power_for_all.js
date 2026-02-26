@@ -1,15 +1,12 @@
 #!/usr/bin/env node
 const path = require('path');
+const dotenv = require('dotenv');
+
+// Load .env file from parent directory
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 async function main() {
   try {
-    // Ensure DB env matches docker-compose mapping when running locally
-    process.env.DB_HOST = process.env.DB_HOST || '127.0.0.1';
-    process.env.DB_PORT = process.env.DB_PORT || '3307';
-    process.env.DB_USER = process.env.DB_USER || 'ridemetrics';
-    process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'ridemetrics_pass';
-    process.env.DB_NAME = process.env.DB_NAME || 'ridemetrics';
-
     const { getPool } = require('../src/db');
     const { computePowerCurve } = require('../src/models/powerCurves');
 
