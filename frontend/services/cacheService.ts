@@ -12,12 +12,30 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
+// In-memory cache as fallback
+const memoryCache = new Map<string, CacheEntry<any>>();
+let asyncStorageAvailable = true;
+
 class CacheService {
   /**
    * Get cached data if it exists and hasn't expired
    */
   async get<T>(key: string, ttlMs: number): Promise<T | null> {
     try {
+      // Try memory cache first
+      const memoryCached = memoryCache.get(key);
+      if (memoryCached) {
+        const age = Date.now() - memoryCached.timestamp;
+        if (age < ttlMs) {
+          console.log(`[Cache] MEM HIT: ${key}`);
+          return memoryCached.data;
+        }
+        memoryCache.delete(key);
+      }
+
+      // Try AsyncStorage if available
+      if (!asyncStorageAvailable) return null;
+
       const cached = await AsyncStorage.getItem(key);
       if (!cached) return null;
 
@@ -25,15 +43,15 @@ class CacheService {
       const age = Date.now() - entry.timestamp;
 
       if (age < ttlMs) {
-        console.log(`[Cache] HIT: ${key} (age: ${(age / 1000).toFixed(1)}s)`);
+        console.log(`[Cache] HIT: ${key}`);
         return entry.data;
       }
 
-      console.log(`[Cache] EXPIRED: ${key} (age: ${(age / 1000).toFixed(1)}s)`);
       await AsyncStorage.removeItem(key);
       return null;
     } catch (error) {
-      console.error(`[Cache] Error reading ${key}:`, error);
+      console.log(`[Cache] Error reading ${key}, using memory only:`, (error as any)?.message);
+      asyncStorageAvailable = false;
       return null;
     }
   }
@@ -47,59 +65,45 @@ class CacheService {
         data,
         timestamp: Date.now(),
       };
+
+      // Always save to memory
+      memoryCache.set(key, entry);
+
+      // Try AsyncStorage if available
+      if (!asyncStorageAvailable) return;
+
       await AsyncStorage.setItem(key, JSON.stringify(entry));
-      console.log(`[Cache] SET: ${key}`);
     } catch (error) {
-      console.error(`[Cache] Error writing ${key}:`, error);
+      console.log(`[Cache] Error writing ${key}:`, (error as any)?.message);
+      asyncStorageAvailable = false;
     }
   }
 
   /**
    * Clear specific cache entry
    */
-  async clear(key: string): Promise<void> {
-    try {
-      await AsyncStorage.removeItem(key);
-      console.log(`[Cache] CLEARED: ${key}`);
-    } catch (error) {
-      console.error(`[Cache] Error clearing ${key}:`, error);
+  async remove(key: string): Promise<void> {
+    memoryCache.delete(key);
+    if (asyncStorageAvailable) {
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch (error) {
+        asyncStorageAvailable = false;
+      }
     }
   }
 
   /**
-   * Clear all cache entries matching a pattern
+   * Clear all cache
    */
-  async clearPattern(pattern: string): Promise<void> {
-    try {
-      const keys = await AsyncStorage.getAllKeys();
-      const toRemove = keys.filter(key => key.includes(pattern));
-      await Promise.all(toRemove.map(key => AsyncStorage.removeItem(key)));
-      console.log(`[Cache] CLEARED PATTERN: ${pattern} (${toRemove.length} entries)`);
-    } catch (error) {
-      console.error(`[Cache] Error clearing pattern ${pattern}:`, error);
-    }
-  }
-
-  /**
-   * Get cache statistics
-   */
-  async getStats(): Promise<{ total: number; byType: Record<string, number> }> {
-    try {
-      const keys = await AsyncStorage.getAllKeys();
-      const stats: Record<string, number> = {};
-      
-      keys.forEach(key => {
-        const type = key.split(':')[0];
-        stats[type] = (stats[type] || 0) + 1;
-      });
-
-      return {
-        total: keys.length,
-        byType: stats,
-      };
-    } catch (error) {
-      console.error('[Cache] Error getting stats:', error);
-      return { total: 0, byType: {} };
+  async clear(): Promise<void> {
+    memoryCache.clear();
+    if (asyncStorageAvailable) {
+      try {
+        await AsyncStorage.clear();
+      } catch (error) {
+        asyncStorageAvailable = false;
+      }
     }
   }
 }

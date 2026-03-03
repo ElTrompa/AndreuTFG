@@ -26,4 +26,16 @@ async function saveProfile(athlete_id, data = {}) {
   return result;
 }
 
-module.exports = { getProfile, saveProfile };
+async function updateProfileFtp(athlete_id, ftp) {
+  const pool = await getPool();
+  const sql = `
+    INSERT INTO profiles (athlete_id, ftp, updated_at)
+    VALUES (?, ?, NOW())
+    ON DUPLICATE KEY UPDATE
+      ftp = VALUES(ftp),
+      updated_at = NOW();
+  `;
+  await pool.query(sql, [athlete_id, ftp]);
+}
+
+module.exports = { getProfile, saveProfile, updateProfileFtp };

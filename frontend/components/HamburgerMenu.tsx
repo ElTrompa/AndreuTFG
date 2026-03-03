@@ -108,28 +108,21 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
         >
           <Text style={styles.itemIcon}>🎯</Text>
           <View>
-            <Text style={styles.itemText}>Session Classifier</Text>
+            <Text style={styles.itemText}>Clasificador de Sesiones</Text>
             <Text style={styles.itemSubText}>AI Training Type Detection</Text>
           </View>
         </TouchableOpacity>
 
-        {/* Coming Soon */}
-        <Text style={[styles.sectionTitle, { marginTop: 12, color: colors.textSecondary }]}>MORE COMING</Text>
-        <View style={styles.disabledItem}>
-          <Text style={styles.itemIcon}>🤖</Text>
+        <TouchableOpacity 
+          style={[styles.item, styles.premiumItem]} 
+          onPress={() => handleNavigate('RoutesSearch')}
+        >
+          <Text style={styles.itemIcon}>🏘️</Text>
           <View>
-            <Text style={styles.disabledText}>ML Predictions</Text>
-            <Text style={styles.itemSubText}>Advanced forecasting</Text>
+            <Text style={styles.itemText}>Búsqueda por Pueblos</Text>
+            <Text style={styles.itemSubText}>Encuentra rutas por pueblo</Text>
           </View>
-        </View>
-
-        <View style={styles.disabledItem}>
-          <Text style={styles.itemIcon}>🌍</Text>
-          <View>
-            <Text style={styles.disabledText}>Social Leaderboards</Text>
-            <Text style={styles.itemSubText}>Anonymous rankings</Text>
-          </View>
-        </View>
+        </TouchableOpacity>
 
         <View style={{ height: 20 }} />
       </ScrollView>
@@ -150,10 +143,9 @@ const styles = StyleSheet.create({
   },
   menu: { 
     width: 280, 
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceLight,
     paddingTop: 16,
-    elevation: 8, 
-    boxShadow: 'rgba(0, 0, 0, 0.2) 0px 0px 16px',
+    elevation: 8,
   },
   title: { 
     fontSize: 20, 

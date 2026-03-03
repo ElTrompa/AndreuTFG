@@ -55,6 +55,101 @@ export default function HRVScreen({
   const [manualHrv, setManualHrv] = useState('');
   const [showInput, setShowInput] = useState(false);
 
+  const safeNumber = (value: any, fallback = 0) => {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const statusColorFor = (status: string) => {
+    switch (status) {
+      case 'excellent':
+        return '#2ecc71';
+      case 'good':
+        return '#3498db';
+      case 'normal':
+        return '#95a5a6';
+      case 'low':
+        return '#f39c12';
+      case 'very_low':
+        return '#e74c3c';
+      default:
+        return '#9ca3af';
+    }
+  };
+
+  const normalizeStatus = (payload: any): HRVStatus => {
+    const statusObj = payload?.status || {};
+    const avgObj = payload?.average || {};
+    const currentHRV = safeNumber(statusObj.todayRMSSD ?? payload?.today, 0);
+    const baseline = safeNumber(statusObj.baseline ?? avgObj.average, 0);
+    const change = Number.isFinite(statusObj.deviation)
+      ? Number(statusObj.deviation)
+      : baseline > 0
+        ? ((currentHRV - baseline) / baseline) * 100
+        : 0;
+    const statusKey = statusObj.status || 'unknown';
+    const statusLabel = String(statusKey).replace(/_/g, ' ');
+    const interpretation = [statusObj.message, statusObj.recommendation]
+      .filter(Boolean)
+      .join(' ');
+
+    return {
+      currentHRV,
+      baseline,
+      status: statusLabel,
+      statusColor: statusColorFor(statusKey),
+      change,
+      interpretation: interpretation || 'Sin datos suficientes para interpretar.',
+    };
+  };
+
+  const normalizeReadiness = (payload: any): TrainingReadiness => {
+    const readiness = payload?.readiness || {};
+    const hrvScore = safeNumber(readiness?.components?.hrv?.score, 50);
+    const tsbValue = safeNumber(readiness?.components?.tsb?.value, 0);
+    const readinessScore = safeNumber(readiness.readiness, 50);
+    const level = readiness.level || 'moderate';
+    const levelLabel =
+      level === 'high' ? 'Óptimo' :
+      level === 'moderate' ? 'Bueno' :
+      level === 'low' ? 'Regular' :
+      'Bajo';
+    const emoji =
+      level === 'high' ? '🔥' :
+      level === 'moderate' ? '💪' :
+      level === 'low' ? '😌' :
+      '🛌';
+
+    return {
+      hrv: hrvScore / 2,
+      tsb: tsbValue,
+      readinessScore,
+      readinessLevel: levelLabel,
+      advice: readiness.recommendation || 'Sin recomendacion disponible.',
+      emoji,
+    };
+  };
+
+  const normalizeAnomalies = (payload: any, baselineValue?: number): HRVAnomaly[] => {
+    const list = Array.isArray(payload?.anomalies) ? payload.anomalies : [];
+    const baseline = safeNumber(baselineValue, 0);
+    return list.map((anom: any) => {
+      const deviation = safeNumber(anom.deviation, 0);
+      const severity = String(anom.severity || '').toLowerCase();
+      const significance =
+        severity === 'high' ? 'Critical' :
+        severity === 'medium' ? 'Major' :
+        'Minor';
+      return {
+        date: anom.date,
+        hrv: safeNumber(anom.rmssd ?? anom.hrv, 0),
+        baseline,
+        drop: Math.abs(deviation),
+        significance,
+      };
+    });
+  };
+
   useEffect(() => {
     fetchHRVData();
   }, []);
@@ -94,15 +189,19 @@ export default function HRVScreen({
         }),
       ]);
 
-      if (statusRes.ok) setHrvStatus(await statusRes.json());
-      if (readinessRes.ok) setReadiness(await readinessRes.json());
-      if (anomaliesRes.ok) {
-        const data = await anomaliesRes.json();
-        setAnomalies(data.anomalies || []);
+      const statusPayload = statusRes.ok ? await statusRes.json() : null;
+      const readinessPayload = readinessRes.ok ? await readinessRes.json() : null;
+      const anomaliesPayload = anomaliesRes.ok ? await anomaliesRes.json() : null;
+
+      if (statusPayload) setHrvStatus(normalizeStatus(statusPayload));
+      if (readinessPayload) setReadiness(normalizeReadiness(readinessPayload));
+      if (anomaliesPayload) {
+        const baselineValue = statusPayload?.status?.baseline ?? statusPayload?.average?.average;
+        setAnomalies(normalizeAnomalies(anomaliesPayload, baselineValue));
       }
 
       if (!statusRes.ok) {
-        setError('Error loading HRV data');
+        setError('Error al cargar datos HRV');
       }
     } catch (err: any) {
       setError(err.message);
@@ -114,7 +213,7 @@ export default function HRVScreen({
   const handleSubmitManualHRV = async () => {
     const hrv = parseFloat(manualHrv);
     if (isNaN(hrv) || hrv <= 0) {
-      Alert.alert('Invalid HRV', 'Please enter a valid HRV value');
+      Alert.alert('HRV inválido', 'Por favor ingrese un valor de HRV válido');
       return;
     }
 
@@ -138,14 +237,16 @@ export default function HRVScreen({
         }),
       ]);
 
-      if (statusRes.ok) setHrvStatus(await statusRes.json());
-      if (readinessRes.ok) setReadiness(await readinessRes.json());
+      const statusPayload = statusRes.ok ? await statusRes.json() : null;
+      const readinessPayload = readinessRes.ok ? await readinessRes.json() : null;
+      if (statusPayload) setHrvStatus(normalizeStatus(statusPayload));
+      if (readinessPayload) setReadiness(normalizeReadiness(readinessPayload));
 
       setManualHrv('');
       setShowInput(false);
-      Alert.alert('Success', 'HRV data updated');
+      Alert.alert('Éxito', 'Datos HRV actualizados');
     } catch (err) {
-      Alert.alert('Error', 'Failed to update HRV');
+      Alert.alert('Error', 'Fallo al actualizar HRV');
     }
   };
 
@@ -163,7 +264,7 @@ export default function HRVScreen({
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.title}>❤️ HRV & Recovery</Text>
-          <Text style={styles.subtitle}>Heart Rate Variability Analysis</Text>
+          <Text style={styles.subtitle}>Análisis de Variabilidad de Frecuencia Cardíaca</Text>
         </View>
       </View>
 
@@ -174,7 +275,7 @@ export default function HRVScreen({
             style={styles.manualInputBtn}
             onPress={() => setShowInput(true)}
           >
-            <Text style={styles.manualInputBtnText}>📱 Enter HRV Manually</Text>
+            <Text style={styles.manualInputBtnText}>📱 Ingresar HRV Manualmente</Text>
           </TouchableOpacity>
         ) : (
           <View style={styles.manualInputForm}>
@@ -214,7 +315,7 @@ export default function HRVScreen({
           <Text
             style={[styles.tabText, activeTab === 'status' && styles.activeTabText]}
           >
-            Status
+            Estado
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -224,7 +325,7 @@ export default function HRVScreen({
           <Text
             style={[styles.tabText, activeTab === 'readiness' && styles.activeTabText]}
           >
-            Readiness
+            Disposición
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -234,7 +335,7 @@ export default function HRVScreen({
           <Text
             style={[styles.tabText, activeTab === 'anomalies' && styles.activeTabText]}
           >
-            Anomalies
+            Anomalías
           </Text>
         </TouchableOpacity>
       </View>
@@ -250,11 +351,11 @@ export default function HRVScreen({
         {activeTab === 'status' && hrvStatus && (
           <View>
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>📊 HRV Status</Text>
+              <Text style={styles.cardTitle}>📊 Estado HRV</Text>
               <View style={styles.cardContent}>
                 <View style={[styles.statusBox, { borderLeftColor: hrvStatus.statusColor }]}>
                   <View style={styles.statusMain}>
-                    <Text style={styles.statusCurrentLabel}>Current HRV</Text>
+                    <Text style={styles.statusCurrentLabel}>HRV Actual</Text>
                     <Text style={[styles.statusCurrentValue, { color: hrvStatus.statusColor }]}>
                       {hrvStatus.currentHRV.toFixed(0)} ms
                     </Text>
@@ -265,13 +366,13 @@ export default function HRVScreen({
 
                   <View style={styles.statusComparison}>
                     <View style={styles.statusMetric}>
-                      <Text style={styles.statusMetricLabel}>Baseline</Text>
+                      <Text style={styles.statusMetricLabel}>Línea Base</Text>
                       <Text style={styles.statusMetricValue}>
                         {hrvStatus.baseline.toFixed(0)} ms
                       </Text>
                     </View>
                     <View style={styles.statusMetric}>
-                      <Text style={styles.statusMetricLabel}>Change</Text>
+                      <Text style={styles.statusMetricLabel}>Cambio</Text>
                       <Text
                         style={[
                           styles.statusMetricValue,
@@ -287,17 +388,17 @@ export default function HRVScreen({
                 </View>
 
                 <View style={styles.interpretation}>
-                  <Text style={styles.interpretationTitle}>Interpretation:</Text>
+                  <Text style={styles.interpretationTitle}>Interpretación:</Text>
                   <Text style={styles.interpretationText}>{hrvStatus.interpretation}</Text>
                 </View>
 
                 <View style={styles.hrvExplanation}>
-                  <Text style={styles.explanationTitle}>What is HRV?</Text>
+                  <Text style={styles.explanationTitle}>¿Qué es HRV?</Text>
                   <Text style={styles.explanationText}>
-                    HRV is the variation in time between heartbeats. Higher HRV{'\n'}
-                    generally indicates better recovery and lower stress.{'\n\n'}
-                    Normal range: 40-100 ms{'\n'}
-                    Athletes: 60-100+ ms
+                    HRV es la variación en el tiempo entre latidos. Un HRV más alto{'\n'}
+                    generalmente indica mejor recuperación y menor estrés.{'\n\n'}
+                    Rango normal: 40-100 ms{'\n'}
+                    Atletas: 60-100+ ms
                   </Text>
                 </View>
               </View>
@@ -308,7 +409,7 @@ export default function HRVScreen({
         {activeTab === 'readiness' && readiness && (
           <View>
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>{readiness.emoji} Training Readiness</Text>
+              <Text style={styles.cardTitle}>{readiness.emoji} Disposición de Entrenamiento</Text>
               <View style={styles.cardContent}>
                 <View style={styles.readinessScore}>
                   <View style={styles.scoreCircle}>
@@ -329,7 +430,7 @@ export default function HRVScreen({
 
                 <View style={styles.readinessMetrics}>
                   <View style={styles.readinessMetric}>
-                    <Text style={styles.readinessMetricLabel}>HRV Component</Text>
+                    <Text style={styles.readinessMetricLabel}>Componente HRV</Text>
                     <View style={styles.metricBar}>
                       <View
                         style={[
@@ -344,7 +445,7 @@ export default function HRVScreen({
                   </View>
 
                   <View style={styles.readinessMetric}>
-                    <Text style={styles.readinessMetricLabel}>TSB (Form)</Text>
+                    <Text style={styles.readinessMetricLabel}>TSB (Forma)</Text>
                     <View style={styles.metricBar}>
                       <View
                         style={[
@@ -366,22 +467,22 @@ export default function HRVScreen({
                 </View>
 
                 <View style={styles.readinessScale}>
-                  <Text style={styles.scaleTitle}>Readiness Scale:</Text>
+                  <Text style={styles.scaleTitle}>Escala de Disposición:</Text>
                   <View style={styles.scaleItem}>
                     <View style={[styles.scaleDot, { backgroundColor: '#2ecc71' }]} />
-                    <Text style={styles.scaleLabel}>Optimal (90-100%): Go hard!</Text>
+                    <Text style={styles.scaleLabel}>Óptimo (90-100%): ¡Entrena fuerte!</Text>
                   </View>
                   <View style={styles.scaleItem}>
                     <View style={[styles.scaleDot, { backgroundColor: '#3498db' }]} />
-                    <Text style={styles.scaleLabel}>Good (70-89%): Normal training</Text>
+                    <Text style={styles.scaleLabel}>Bueno (70-89%): Entrenamiento normal</Text>
                   </View>
                   <View style={styles.scaleItem}>
                     <View style={[styles.scaleDot, { backgroundColor: '#f39c12' }]} />
-                    <Text style={styles.scaleLabel}>Fair (50-69%): Easy pace</Text>
+                    <Text style={styles.scaleLabel}>Regular (50-69%): Ritmo fácil</Text>
                   </View>
                   <View style={styles.scaleItem}>
                     <View style={[styles.scaleDot, { backgroundColor: '#e74c3c' }]} />
-                    <Text style={styles.scaleLabel}>Low (&lt;50%): Rest/Recovery</Text>
+                    <Text style={styles.scaleLabel}>Bajo (&lt;50%): Descanso/Recuperación</Text>
                   </View>
                 </View>
               </View>
@@ -393,10 +494,10 @@ export default function HRVScreen({
           <View>
             {anomalies.length > 0 ? (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>⚠️ HRV Anomalies</Text>
+                <Text style={styles.cardTitle}>⚠️ Anomalías HRV</Text>
                 <View style={styles.cardContent}>
                   <Text style={styles.anomalyInfo}>
-                    {anomalies.length} significant drop(s) detected in recent data
+                    {anomalies.length} caída(s) significativa(s) detectada(s) en datos recientes
                   </Text>
                   {anomalies.map((anom, idx) => (
                     <View key={idx} style={styles.anomalyItem}>
@@ -413,11 +514,11 @@ export default function HRVScreen({
                       </View>
                       <View style={styles.anomalyDetails}>
                         <View style={styles.anomalyDetail}>
-                          <Text style={styles.anomalyDetailLabel}>Measured</Text>
+                          <Text style={styles.anomalyDetailLabel}>Medido</Text>
                           <Text style={styles.anomalyDetailValue}>{anom.hrv} ms</Text>
                         </View>
                         <View style={styles.anomalyDetail}>
-                          <Text style={styles.anomalyDetailLabel}>Baseline</Text>
+                          <Text style={styles.anomalyDetailLabel}>Línea Base</Text>
                           <Text style={styles.anomalyDetailValue}>{anom.baseline} ms</Text>
                         </View>
                         <View style={styles.anomalyDetail}>
@@ -430,12 +531,12 @@ export default function HRVScreen({
                     </View>
                   ))}
                   <View style={styles.anomalyAdvice}>
-                    <Text style={styles.anomalyAdviceTitle}>💡 Recommendations:</Text>
+                    <Text style={styles.anomalyAdviceTitle}>💡 Recomendaciones:</Text>
                     <Text style={styles.anomalyAdviceText}>
-                      • Check for stress, illness, or poor sleep{'\n'}
-                      • Consider reducing training intensity{'\n'}
-                      • Allow extra recovery time{'\n'}
-                      • Monitor HRV closely over next few days
+                      • Verifica estrés, enfermedad o mal sueño{'\n'}
+                      • Considera reducir la intensidad del entrenamiento{'\n'}
+                      • Permite tiempo extra de recuperación{'\n'}
+                      • Monitorea el HRV de cerca en los próximos días
                     </Text>
                   </View>
                 </View>
@@ -444,8 +545,8 @@ export default function HRVScreen({
               <View style={styles.card}>
                 <View style={styles.cardContent}>
                   <Text style={styles.noAnomalyText}>
-                    ✓ No significant anomalies detected!{'\n'}
-                    Your HRV is stable and normal.
+                    ✓ ¡No se detectaron anomalías significativas!{'\n'}
+                    Tu HRV es estable y normal.
                   </Text>
                 </View>
               </View>

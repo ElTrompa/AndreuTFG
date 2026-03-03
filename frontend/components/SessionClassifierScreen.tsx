@@ -74,15 +74,21 @@ export default function SessionClassifierScreen({
   const fetchActivities = async () => {
     try {
       const res = await fetch(
-        `${apiBase}/athlete?limit=20`,
+        `${apiBase}/strava/activities?per_page=20`,
         { headers: { Authorization: `Bearer ${jwt}` } }
       );
       if (res.ok) {
         const data = await res.json();
-        setActivities(data.activities || []);
-        if (data.activities?.[0]) {
-          setSelectedActivity(data.activities[0].id);
-          fetchClassification(data.activities[0].id);
+        const activitiesList = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.activities)
+            ? data.activities
+            : [];
+        setActivities(activitiesList);
+        if (activitiesList[0]) {
+          const firstId = String(activitiesList[0].id);
+          setSelectedActivity(firstId);
+          fetchClassification(firstId);
         }
       }
     } catch (err) {
@@ -167,8 +173,8 @@ export default function SessionClassifierScreen({
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>🎯 Session Classifier</Text>
-        <Text style={styles.subtitle}>AI-Powered Training Type Detection</Text>
+        <Text style={styles.title}>🎯 Clasificador de Sesiones</Text>
+        <Text style={styles.subtitle}>Detección de Tipo de Entrenamiento</Text>
       </View>
 
       {/* Activity Selector */}
@@ -329,7 +335,7 @@ export default function SessionClassifierScreen({
                   <View style={styles.recommendationsBox}>
                     <Text style={styles.recommendationsTitle}>💡 Recommendations:</Text>
                     {classification.recommendations.map((rec, idx) => (
-                      <Text key={idx} style={styles.recommendationItem}>
+                      <Text style={styles.recommendationItem}>
                         • {rec}
                       </Text>
                     ))}
@@ -356,7 +362,7 @@ export default function SessionClassifierScreen({
                   ].map((type) => {
                     if (type.value === 0) return null;
                     return (
-                      <View key={type.name} style={styles.distributionItem}>
+                      <View style={styles.distributionItem}>
                         <View style={styles.distributionItemLeft}>
                           <View
                             style={[

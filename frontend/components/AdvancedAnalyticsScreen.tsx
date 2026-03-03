@@ -87,15 +87,14 @@ export default function AdvancedAnalyticsScreen({
           headers: { Authorization: `Bearer ${jwt}` },
         }),
         fetch(`${apiBase}/advanced/pmc-forecast`, {
-          headers: { Authorization: `Bearer ${jwt}` },
           method: 'POST',
-          body: JSON.stringify({
-            plannedTSS: [100, 80, 120, 0, 90, 110, 150],
-          }),
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${jwt}`,
           },
+          body: JSON.stringify({
+            plannedTSS: [100, 80, 120, 0, 90, 110, 150],
+          }),
         }),
         fetch(`${apiBase}/advanced/daily-recommendation`, {
           headers: { Authorization: `Bearer ${jwt}` },

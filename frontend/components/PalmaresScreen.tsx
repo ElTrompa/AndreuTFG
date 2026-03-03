@@ -239,10 +239,6 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
         data = koms;
         emptyMessage = 'No tienes KOMs aún. ¡Conquista ese segmento!';
         break;
-      case 'legends':
-        data = localLegends;
-        emptyMessage = 'No tienes segmentos frecuentes aún.';
-        break;
     }
 
     if (data.length === 0) {
@@ -296,10 +292,6 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
               <Text style={styles.statNumber}>{stats.total_koms || 0}</Text>
               <Text style={styles.statBoxLabel}>KOMs</Text>
             </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{stats.total_local_legends || 0}</Text>
-              <Text style={styles.statBoxLabel}>Frecuentes</Text>
-            </View>
           </View>
         )}
       </View>
@@ -327,14 +319,6 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
         >
           <Text style={[styles.tabText, activeTab === 'koms' && styles.activeTabText]}>
             👑 KOMs
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'legends' && styles.activeTab]}
-          onPress={() => setActiveTab('legends')}
-        >
-          <Text style={[styles.tabText, activeTab === 'legends' && styles.activeTabText]}>
-            ⭐ Frecuentes
           </Text>
         </TouchableOpacity>
       </View>

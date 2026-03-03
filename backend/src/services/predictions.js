@@ -37,8 +37,9 @@ function estimateFTPFrom60min(power60min) {
 function estimateFTPFromPowerCurve(powerCurve) {
   if (!powerCurve) return { ftpEstimated: 0, method: 'none', confidence: 0 };
 
-  const p20min = powerCurve[1200]; // 20 minutos
-  const p60min = powerCurve[3600]; // 60 minutos
+  // Support both numeric keys (1200, 3600) and string keys ('20m', '1h')
+  const p20min = powerCurve['20m'] || powerCurve[1200]; // 20 minutos
+  const p60min = powerCurve['1h'] || powerCurve[3600]; // 60 minutos
 
   if (p20min && p20min > 0) {
     return {
@@ -141,9 +142,10 @@ function calculateCriticalPower(powerCurve) {
   if (!powerCurve) return { CP: 0, Wprime: 0, model: 'insufficient_data' };
 
   // Usar 3 puntos: 3min, 10min, 20min para regresión
-  const p3min = powerCurve[180];
-  const p10min = powerCurve[600];
-  const p20min = powerCurve[1200];
+  // Support both numeric keys and string keys
+  const p3min = powerCurve['3m'] || powerCurve[180];
+  const p10min = powerCurve['10m'] || powerCurve[600];
+  const p20min = powerCurve['20m'] || powerCurve[1200];
 
   if (!p3min || !p10min || !p20min) {
     return { CP: 0, Wprime: 0, model: 'insufficient_data' };

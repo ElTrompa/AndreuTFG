@@ -84,3 +84,30 @@ CREATE TABLE IF NOT EXISTS api_sync_log (
   UNIQUE KEY unique_sync (athlete_id, endpoint),
   INDEX (athlete_id, endpoint)
 );
+
+-- Store towns/cities found on activities
+CREATE TABLE IF NOT EXISTS towns (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  lat DECIMAL(10,8),
+  lng DECIMAL(11,8),
+  province VARCHAR(100),
+  country VARCHAR(100),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_town (name, province, country),
+  INDEX (name, country)
+);
+
+-- Link activities to towns (for route search by town)
+CREATE TABLE IF NOT EXISTS activity_towns (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  athlete_id BIGINT NOT NULL,
+  activity_id BIGINT NOT NULL,
+  town_id INT NOT NULL,
+  distance_from_center DECIMAL(8,2),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_activity_town (activity_id, town_id),
+  INDEX (athlete_id, town_id),
+  INDEX (activity_id),
+  FOREIGN KEY (town_id) REFERENCES towns(id) ON DELETE CASCADE
+);

@@ -63,22 +63,37 @@ router.get('/ftp-prediction', async (req, res) => {
   if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id' });
 
   try {
-    const powerCurve = await getPowerCurve(athlete_id);
+    const powerCurveRecord = await getPowerCurve(athlete_id);
     const profile = await getProfile(athlete_id);
     
-    if (!powerCurve) {
+    if (!powerCurveRecord) {
       return res.status(404).json({ error: 'No power curve data found' });
     }
 
+    const powerCurve = powerCurveRecord.data;
     const ftpPrediction = estimateFTPFromPowerCurve(powerCurve);
     
     // Get recent activities for trend
     const activities = await strava.getActivities(athlete_id, { per_page: 100 });
-    const trend = analyzeFTPTrend(activities, profile?.ftp);
+    const trendData = analyzeFTPTrend(activities, profile?.ftp);
+
+    // Reshape trend data for frontend compatibility
+    const trend = {
+      recentAvg: trendData.avgRecentNP || null,
+      trend: trendData.trend,
+      recommendation: trendData.recommendation,
+      change: trendData.change,
+      estimatedNewFTP: trendData.estimatedNewFTP
+    };
 
     res.json({
       currentFTP: profile?.ftp || null,
-      prediction: ftpPrediction,
+      prediction: {
+        ftpEstimated: ftpPrediction.ftpEstimated,
+        method: ftpPrediction.method,
+        confidence: ftpPrediction.confidence ? ftpPrediction.confidence.toFixed(2) : '0.0',
+        basedOn: ftpPrediction.basedOn
+      },
       trend,
       recommendation: ftpPrediction.ftpEstimated && profile?.ftp
         ? (ftpPrediction.ftpEstimated > profile.ftp * 1.05
@@ -100,12 +115,13 @@ router.get('/critical-power', async (req, res) => {
   if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id' });
 
   try {
-    const powerCurve = await getPowerCurve(athlete_id);
+    const powerCurveRecord = await getPowerCurve(athlete_id);
     
-    if (!powerCurve) {
+    if (!powerCurveRecord) {
       return res.status(404).json({ error: 'No power curve data found' });
     }
 
+    const powerCurve = powerCurveRecord.data;
     const cp = calculateCriticalPower(powerCurve);
 
     // Calcular ejemplos de tiempo hasta agotamiento
@@ -146,18 +162,21 @@ router.post('/pmc-forecast', async (req, res) => {
   try {
     const { plannedTSS } = req.body;
     
-    if (!plannedTSS || !Array.isArray(plannedTSS)) {
-      return res.status(400).json({ error: 'plannedTSS array required' });
-    }
+    const defaultTSS = Array.isArray(plannedTSS) ? plannedTSS : [100, 80, 120, 0, 90, 110, 150];
 
     // Get current PMC
     const activities = await strava.getActivities(athlete_id, { per_page: 100 });
     const profile = await getProfile(athlete_id);
     const pmc = calculatePMC(activities, profile);
     
-    const currentPMC = pmc && pmc.length > 0 ? pmc[pmc.length - 1] : { CTL: 0, ATL: 0, TSB: 0 };
+    const lastPMC = pmc && pmc.length > 0 ? pmc[pmc.length - 1] : null;
+    const currentPMC = lastPMC ? {
+      CTL: lastPMC.ctl || 0,
+      ATL: lastPMC.atl || 0,
+      TSB: lastPMC.tsb || 0
+    } : { CTL: 0, ATL: 0, TSB: 0 };
 
-    const forecast = forecastPMC(currentPMC, plannedTSS);
+    const forecast = forecastPMC(currentPMC, defaultTSS);
 
     res.json({
       current: currentPMC,
@@ -216,12 +235,17 @@ router.get('/daily-recommendation', async (req, res) => {
     const week = now - (7 * 24 * 60 * 60 * 1000);
     const recentActivities = activities.filter(a => new Date(a.start_date).getTime() > week);
 
-    const recommendation = getDailyRecommendation(currentPMC, profile, recentActivities);
+    const rec = getDailyRecommendation(currentPMC, profile, recentActivities);
 
     res.json({
       date: new Date().toISOString().split('T')[0],
       pmc: currentPMC,
-      recommendation
+      // Flat structure for frontend compatibility
+      recommendation: `${rec.emoji} ${rec.message}`,
+      intensity: rec.workout?.intensity || rec.status || 'Moderada',
+      duration: rec.workout?.duration ? `${rec.workout.duration} min` : '60 min',
+      reason: rec.reasoning || rec.workout?.description || '',
+      full: rec
     });
   } catch (err) {
     console.error('[Daily Recommendation] Error:', err);
@@ -308,34 +332,78 @@ router.get('/activity/:id/advanced-metrics', async (req, res) => {
       return res.status(404).json({ error: 'Activity not found' });
     }
 
-    const metrics = {};
+    const result = {
+      activityId: activity.id,
+      activityName: activity.name,
+      variabilityIndex: {
+        value: 0,
+        np: activity.weighted_average_watts || 0,
+        avgPower: activity.average_watts || 0,
+        rating: 'unknown'
+      },
+      pacingAnalysis: {
+        strategy: 'unknown',
+        firstThirdPower: 0,
+        lastThirdPower: 0,
+        improvement: 0,
+        advice: 'Sin datos de ritmo disponibles'
+      },
+      peakPowerRecords: [],
+      efficiencyTrend: {
+        efficiency: 0,
+        aerobicDecoupling: 0,
+        previousWeek: 0,
+        trend: 'neutral'
+      }
+    };
 
     // Variability Index
     if (activity.weighted_average_watts && activity.average_watts) {
       const vi = calculateVariabilityIndex(activity.weighted_average_watts, activity.average_watts);
-      metrics.variabilityIndex = {
+      const viInfo = interpretVI(vi);
+      result.variabilityIndex = {
         value: vi,
-        ...interpretVI(vi)
+        np: activity.weighted_average_watts,
+        avgPower: activity.average_watts,
+        rating: viInfo.rating || 'unknown'
       };
     }
 
     // Pacing Score (requiere stream)
-    const streams = await strava.getActivityStreams(athlete_id, req.params.id, ['watts']).catch(() => null);
-    if (streams && streams.watts) {
-      metrics.pacing = analyzePacing(streams.watts.data, activity.moving_time);
+    try {
+      const streams = await strava.getActivityStreams(athlete_id, req.params.id, ['watts']).catch(() => null);
+      if (streams && streams.watts && streams.watts.data && streams.watts.data.length > 0) {
+        const pacingInfo = analyzePacing(streams.watts.data, activity.moving_time);
+        result.pacingAnalysis = {
+          strategy: pacingInfo.strategy || 'Desconocida',
+          firstThirdPower: pacingInfo.firstThirdPower || 0,
+          lastThirdPower: pacingInfo.lastThirdPower || 0,
+          improvement: pacingInfo.improvement || 0,
+          advice: pacingInfo.advice || 'Sin recomendaciones'
+        };
+      }
+    } catch (e) {
+      console.log('[Advanced Metrics] No pacing data:', e.message);
     }
 
     // Check for power records
-    const powerCurve = await getPowerCurve(athlete_id);
-    if (activity.power_curve && powerCurve) {
-      metrics.records = detectPowerRecords(activity.power_curve, powerCurve);
+    try {
+      const powerCurve = await getPowerCurve(athlete_id);
+      if (powerCurve && powerCurve.data) {
+        const records = detectPowerRecords(activity, powerCurve.data);
+        if (records && records.length > 0) {
+          result.peakPowerRecords = records.map(r => ({
+            duration: r.duration || 'unknown',
+            power: r.power || 0,
+            isRecord: r.isRecord || false
+          }));
+        }
+      }
+    } catch (e) {
+      console.log('[Advanced Metrics] No power records:', e.message);
     }
 
-    res.json({
-      activity_id: activity.id,
-      activity_name: activity.name,
-      metrics
-    });
+    res.json(result);
   } catch (err) {
     console.error('[Advanced Metrics] Error:', err);
     res.status(500).json({ error: String(err) });
@@ -385,9 +453,22 @@ router.get('/activity/:id/classify', async (req, res) => {
     const classification = classifySession(activity, profile);
 
     res.json({
-      activity_id: activity.id,
-      activity_name: activity.name,
-      classification
+      activityId: activity.id,
+      activityName: activity.name,
+      sessionType: classification.type || 'Desconocido',
+      confidence: classification.confidence || 0,
+      features: {
+        IF: classification.intensityFactor || 0,
+        VI: classification.variabilityIndex || 0,
+        timeInZ5: classification.timeInZ5 || 0,
+        timeInZ4: classification.timeInZ4 || 0,
+        timeInZ3: classification.timeInZ3 || 0,
+        avgPower: activity.average_watts || 0,
+        normPower: activity.weighted_average_watts || 0
+      },
+      interpretation: classification.interpretation || 'Sin interpretación',
+      trainingBenefit: classification.benefit || 'Desconocido',
+      recommendations: classification.recommendations || []
     });
   } catch (err) {
     console.error('[Classify Session] Error:', err);
@@ -407,21 +488,45 @@ router.get('/training-distribution', async (req, res) => {
     const activities = await strava.getActivities(athlete_id, { per_page: 200 });
     const profile = await getProfile(athlete_id);
 
-    // Classify all activities
-    const classified = await batchClassify(activities, profile);
-    
-    // Add classifications to activities
-    const activitiesWithTypes = activities.map(a => {
-      const c = classified.find(cl => cl.id === a.id);
-      return {
-        ...a,
-        session_type: c?.classification.type
-      };
-    });
+    // Simple distribution analysis
+    const result = {
+      sweetSpot: 0,
+      VO2max: 0,
+      easy: 0,
+      anaerobic: 0,
+      endurance: 0,
+      other: 0,
+      polarization: {
+        isPolarized: false,
+        intensity: 'balanced',
+        assessment: 'Sin clasificación suficiente'
+      }
+    };
 
-    const distribution = analyzeTrainingDistribution(activitiesWithTypes, days);
+    if (activities && activities.length > 0) {
+      activities.slice(0, Math.min(days, activities.length)).forEach(activity => {
+        const avgWatts = activity.average_watts || 0;
+        const movingTime = activity.moving_time || 0;
+        
+        // Simple classification based on power
+        if (avgWatts > 250 && movingTime > 300) {
+          result.endurance += 1;
+        } else if (avgWatts < 150) {
+          result.easy += 1;
+        } else if (avgWatts > 300) {
+          result.VO2max += 1;
+        } else {
+          result.sweetSpot += 1;
+        }
+      });
 
-    res.json(distribution);
+      result.polarization.isPolarized = result.easy > result.sweetSpot;
+      result.polarization.assessment = result.polarization.isPolarized 
+        ? 'Entrenamiento polarizado detectado' 
+        : 'Distribución equilibrada';
+    }
+
+    res.json(result);
   } catch (err) {
     console.error('[Training Distribution] Error:', err);
     res.status(500).json({ error: String(err) });

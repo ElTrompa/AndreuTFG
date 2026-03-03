@@ -46,11 +46,29 @@ router.post('/hrv/status', async (req, res) => {
   if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id' });
 
   try {
-    const { todayRMSSD, historicalData } = req.body;
+    let { todayRMSSD, historicalData, hrv } = req.body;
+
+    // Support simple format with just 'hrv' for demo
+    if (hrv && !todayRMSSD) {
+      todayRMSSD = hrv;
+      // Generate dummy historical data (30 days)
+      historicalData = [];
+      const baseHRV = hrv;
+      for (let i = 30; i >= 1; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        // Add some variation
+        const variation = (Math.random() - 0.5) * 10;
+        historicalData.push({
+          date: date.toISOString().split('T')[0],
+          rmssd: Math.round(baseHRV + variation)
+        });
+      }
+    }
 
     if (!todayRMSSD || !historicalData || !Array.isArray(historicalData)) {
       return res.status(400).json({ 
-        error: 'Required: todayRMSSD (number) and historicalData (array of {date, rmssd})' 
+        error: 'Required: todayRMSSD (number) and historicalData (array of {date, rmssd}) OR hrv (number)' 
       });
     }
 
@@ -77,26 +95,43 @@ router.post('/hrv/readiness', async (req, res) => {
   if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id' });
 
   try {
-    const { todayRMSSD, historicalData } = req.body;
+    let { todayRMSSD, historicalData, hrv } = req.body;
+
+    // Support simple format with just 'hrv' for demo
+    if (hrv && !todayRMSSD) {
+      todayRMSSD = hrv;
+      // Generate dummy historical data
+      historicalData = [];
+      const baseHRV = hrv;
+      for (let i = 30; i >= 1; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const variation = (Math.random() - 0.5) * 10;
+        historicalData.push({
+          date: date.toISOString().split('T')[0],
+          rmssd: Math.round(baseHRV + variation)
+        });
+      }
+    }
 
     if (!todayRMSSD || !historicalData) {
-      return res.status(400).json({ error: 'Required: todayRMSSD and historicalData' });
+      return res.status(400).json({ error: 'Required: todayRMSSD and historicalData OR hrv' });
     }
 
     // Get current TSB
     const activities = await strava.getActivities(athlete_id, { per_page: 100 });
     const profile = await getProfile(athlete_id);
     const pmc = calculatePMC(activities, profile);
-    const currentPMC = pmc && pmc.length > 0 ? pmc[pmc.length - 1] : { TSB: 0 };
+    const currentPMC = pmc && pmc.length > 0 ? pmc[pmc.length - 1] : { tsb: 0 };
 
     const hrvStatus = analyzeHRVStatus(todayRMSSD, historicalData);
-    const readiness = calculateTrainingReadiness(hrvStatus, currentPMC.TSB);
+    const readiness = calculateTrainingReadiness(hrvStatus, currentPMC.tsb || 0);
 
     res.json({
       readiness,
       inputs: {
         hrv: hrvStatus,
-        tsb: currentPMC.TSB
+        tsb: currentPMC.tsb || 0
       }
     });
   } catch (err) {
@@ -111,10 +146,28 @@ router.post('/hrv/readiness', async (req, res) => {
  */
 router.post('/hrv/anomalies', async (req, res) => {
   try {
-    const { historicalData, threshold } = req.body;
+    let { historicalData, threshold, hrv } = req.body;
+
+    // Support simple format with just 'hrv' for demo
+    if (hrv && !historicalData) {
+      // Generate dummy historical data with some anomalies
+      historicalData = [];
+      const baseHRV = hrv;
+      for (let i = 60; i >= 1; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        let variation = (Math.random() - 0.5) * 8;
+        // Add occasional drops for anomaly detection
+        if (i === 45 || i === 20 || i === 5) variation = -15;
+        historicalData.push({
+          date: date.toISOString().split('T')[0],
+          rmssd: Math.round(baseHRV + variation)
+        });
+      }
+    }
 
     if (!historicalData || !Array.isArray(historicalData)) {
-      return res.status(400).json({ error: 'Required: historicalData array' });
+      return res.status(400).json({ error: 'Required: historicalData array OR hrv' });
     }
 
     const anomalies = detectHRVAnomalies(historicalData, threshold);

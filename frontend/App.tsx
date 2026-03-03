@@ -19,11 +19,12 @@ import MetricasAvanzadasScreen from './components/MetricasAvanzadasScreen';
 import HRVScreen from './components/HRVScreen';
 import TerrainScreen from './components/TerrainScreen';
 import SessionClassifierScreen from './components/SessionClassifierScreen';
+import RoutesSearchScreen from './components/RoutesSearchScreen';
 import { StyleSheet, Text, View, Button, Linking, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { colors } from './theme';
 
-const API_BASE_URL = 'http://localhost:3001';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
 const logoXml = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
@@ -60,7 +61,7 @@ const logoXml = `<?xml version="1.0" encoding="UTF-8"?>
 
 export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [screen, setScreen] = useState<'Home'|'Potencia'|'Proyecciones'|'Settings'|'Profile'|'Activities'|'ActivityDetail'|'Palmares'|'AdvancedAnalytics'|'MetricasAvanzadas'|'HRV'|'Terrain'|'SessionClassifier'>('Home');
+  const [screen, setScreen] = useState<'Home'|'Potencia'|'Proyecciones'|'Settings'|'Profile'|'Activities'|'ActivityDetail'|'Palmares'|'AdvancedAnalytics'|'MetricasAvanzadas'|'HRV'|'Terrain'|'SessionClassifier'|'RoutesSearch'>('Home');
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
   const [jwt, setJwt] = useState<string | null>(null);
   const [athlete, setAthlete] = useState<any>(null);
@@ -148,9 +149,9 @@ export default function App() {
 
     Linking.getInitialURL().then(processUrl).catch(() => {});
     const listener = ({ url }) => processUrl(url);
-    Linking.addEventListener('url', listener);
+    const linkingSubscription = Linking.addEventListener('url', listener);
     return () => {
-      Linking.removeEventListener('url', listener);
+      linkingSubscription?.remove?.();
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
@@ -276,6 +277,50 @@ export default function App() {
 
   const powerMap = powerData || approxPowerMap;
 
+  if (jwt && screen !== 'Home') {
+    return (
+      <View style={styles.fullScreenRoot}>
+        <HamburgerMenu open={menuOpen} onClose={() => setMenuOpen(false)} navigate={(s:string)=>{ setScreen(s as any); setMenuOpen(false); }} />
+
+        <TouchableOpacity style={{ position:'absolute', left: 18, top: 28, zIndex: 20 }} onPress={() => setMenuOpen(true)}>
+          <SvgXml xml={`<svg width="28" height="22" viewBox="0 0 28 22" xmlns="http://www.w3.org/2000/svg"><rect width="28" height="3" y="0" rx="1.5" fill="#0b4860"/><rect width="28" height="3" y="9" rx="1.5" fill="#0b4860"/><rect width="28" height="3" y="18" rx="1.5" fill="#0b4860"/></svg>`} width={28} height={22} />
+        </TouchableOpacity>
+
+        {screen === 'Potencia' && (
+          <PotenciaScreen powerMap={powerMap} weightKg={profile && profile.weight_kg ? profile.weight_kg : (athlete && athlete.weight ? athlete.weight : null)} activities={activities} profile={profile} />
+        )}
+        {screen === 'Proyecciones' && (<ProyeccionesScreen activities={activities} />)}
+        {screen === 'Profile' && (<ProfileScreen jwt={jwt} apiBase={API_BASE_URL} onSaved={(p:any)=>setProfile(p)} />)}
+        {screen === 'Activities' && (
+          <ActivitiesScreen jwt={jwt} apiBase={API_BASE_URL} profile={profile} onSelectActivity={(id) => {
+            setSelectedActivityId(id);
+            setScreen('ActivityDetail');
+          }} />
+        )}
+        {screen === 'ActivityDetail' && selectedActivityId && (
+          <ActivityDetailScreen activityId={selectedActivityId} jwt={jwt} profile={profile} apiBase={API_BASE_URL} onBack={() => setScreen('Activities')} />
+        )}
+        {screen === 'Palmares' && (<PalmaresScreen jwt={jwt} apiBase={API_BASE_URL} />)}
+        {screen === 'AdvancedAnalytics' && (<AdvancedAnalyticsScreen jwt={jwt} apiBase={API_BASE_URL} />)}
+        {screen === 'MetricasAvanzadas' && (<MetricasAvanzadasScreen jwt={jwt} apiBase={API_BASE_URL} />)}
+        {screen === 'HRV' && (<HRVScreen jwt={jwt} apiBase={API_BASE_URL} />)}
+        {screen === 'Terrain' && (<TerrainScreen jwt={jwt} apiBase={API_BASE_URL} />)}
+        {screen === 'SessionClassifier' && (<SessionClassifierScreen jwt={jwt} apiBase={API_BASE_URL} />)}
+        {screen === 'RoutesSearch' && (
+          <RoutesSearchScreen
+            jwt={jwt}
+            athlete={athlete}
+            apiBase={API_BASE_URL}
+            onSelectActivity={(id) => {
+              setSelectedActivityId(id);
+              setScreen('ActivityDetail');
+            }}
+          />
+        )}
+      </View>
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <SvgXml xml={logoXml} width={120} height={120} style={styles.logo} />
@@ -364,11 +409,28 @@ export default function App() {
         <SessionClassifierScreen jwt={jwt} apiBase={API_BASE_URL} />
       )}
 
+      {/* Routes Search by Town */}
+      {jwt && screen === 'RoutesSearch' && (
+        <RoutesSearchScreen
+          jwt={jwt}
+          athlete={athlete}
+          apiBase={API_BASE_URL}
+          onSelectActivity={(id) => {
+            setSelectedActivityId(id);
+            setScreen('ActivityDetail');
+          }}
+        />
+      )}
+
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  fullScreenRoot: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.background,

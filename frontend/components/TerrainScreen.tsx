@@ -82,15 +82,21 @@ export default function TerrainScreen({
   const fetchActivities = async () => {
     try {
       const res = await fetch(
-        `${apiBase}/athlete?limit=20`,
+        `${apiBase}/strava/activities?per_page=20`,
         { headers: { Authorization: `Bearer ${jwt}` } }
       );
       if (res.ok) {
         const data = await res.json();
-        setActivities(data.activities || []);
-        if (data.activities?.[0]) {
-          setSelectedActivity(data.activities[0].id);
-          fetchActivityTerreno(data.activities[0].id);
+        const activitiesList = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.activities)
+            ? data.activities
+            : [];
+        setActivities(activitiesList);
+        if (activitiesList[0]) {
+          const firstId = String(activitiesList[0].id);
+          setSelectedActivity(firstId);
+          fetchActivityTerreno(firstId);
         }
       }
     } catch (err) {
@@ -101,13 +107,35 @@ export default function TerrainScreen({
   const fetchActivityTerreno = async (id: string) => {
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(
         `${apiBase}/specialized/terrain/${id}`,
         { headers: { Authorization: `Bearer ${jwt}` } }
       );
       if (res.ok) {
         const data = await res.json();
-        setClimbs(data.climbs || []);
+        const climbsRaw = Array.isArray(data?.analysis?.climbs)
+          ? data.analysis.climbs
+          : Array.isArray(data?.climbs)
+            ? data.climbs
+            : [];
+
+        const normalized = climbsRaw.map((climb: any, idx: number) => ({
+          id: String(climb.id || idx),
+          name: climb.name || `Climb ${idx + 1}`,
+          distance: Number(climb.distance || 0),
+          gain: Number(climb.gain || climb.elevationGain || 0),
+          avgGrade: Number(climb.avgGrade || climb.avgGradient || 0),
+          maxGrade: Number(climb.maxGrade || climb.max_gradient || climb.avgGrade || 0),
+          category: String(climb.category || 'cat4'),
+          powerAvg: Number(climb.powerAvg || climb.avgPower || 0),
+          weightedWkg: Number(climb.weightedWkg || climb.wkg || 0),
+          VAM: Number(climb.VAM || climb.vam || 0),
+          time: Number(climb.time || climb.duration || 0),
+          difficulty: String(climb.difficulty || 'moderate'),
+        }));
+
+        setClimbs(normalized);
       } else {
         setError('No climbs detected in this activity');
       }
@@ -147,8 +175,10 @@ export default function TerrainScreen({
       );
       if (res.ok) {
         const data = await res.json();
-        setSelectedClimb(data.climb);
-        setProjectedTime(data.projectedTime);
+        const climbData = data?.simulation?.climb || data?.climb || null;
+        const projected = data?.simulation?.simulation?.timeFormatted || data?.projectedTime || null;
+        setSelectedClimb(climbData);
+        setProjectedTime(projected);
       } else {
         Alert.alert('Error', 'Could not simulate climb');
       }
@@ -197,8 +227,8 @@ export default function TerrainScreen({
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>⛰️ Terrain Analysis</Text>
-        <Text style={styles.subtitle}>Climb Detection & Simulation</Text>
+        <Text style={styles.title}>⛰️ Análisis de Terreno</Text>
+        <Text style={styles.subtitle}>Detección & Simulación de Puertos</Text>
       </View>
 
       {/* Activity Selector */}
@@ -240,7 +270,7 @@ export default function TerrainScreen({
           <Text
             style={[styles.tabText, activeTab === 'activity' && styles.activeTabText]}
           >
-            Activity
+            Actividad
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -250,7 +280,7 @@ export default function TerrainScreen({
           <Text
             style={[styles.tabText, activeTab === 'famous' && styles.activeTabText]}
           >
-            Famous
+            Famosos
           </Text>
         </TouchableOpacity>
       </View>
@@ -267,7 +297,7 @@ export default function TerrainScreen({
           <View>
             {climbs.length > 0 ? (
               climbs.map((climb, idx) => (
-                <View key={idx} style={styles.card}>
+                <View style={styles.card}>
                   <View
                     style={[
                       styles.cardHeader,
@@ -426,7 +456,7 @@ export default function TerrainScreen({
               <View>
                 <Text style={styles.sectionTitle}>Famous Climbs Catalog</Text>
                 {famousClimbs.map((climb) => (
-                  <View key={climb.id} style={styles.climbItem}>
+                  <View style={styles.climbItem}>
                     <View style={styles.climbItemContent}>
                       <Text style={styles.climbItemName}>{climb.name}</Text>
                       <Text style={styles.climbItemLocation}>{climb.country}</Text>

@@ -28,6 +28,26 @@ function calculateEMA(previousEMA, todayTSS, period) {
 }
 
 /**
+ * Calcula TSS desde los campos de una actividad de Strava
+ * @param {Object} act - Actividad de Strava
+ * @param {number} ftp - FTP del atleta
+ * @returns {number} TSS estimado
+ */
+function computeActivityTSS(act, ftp) {
+  // Si la actividad ya tiene TSS definido, usarlo
+  if (act.tss && act.tss > 0) return act.tss;
+  if (!ftp || ftp <= 0) return 0;
+
+  const np = act.weighted_average_watts || act.average_watts || 0;
+  const duration = act.moving_time || act.elapsed_time || 0;
+  if (!np || !duration) return 0;
+
+  const intensityFactor = np / ftp;
+  const tss = (duration * np * intensityFactor) / (ftp * 3600) * 100;
+  return Math.round(tss);
+}
+
+/**
  * Calcula ATL, CTL y TSB para un rango de fechas
  * @param {Array} activities - Array de actividades con TSS y fecha
  * @param {Object} options - Opciones de cálculo
@@ -38,11 +58,15 @@ function calculatePMC(activities, options = {}) {
     initialATL = 0,
     initialCTL = 0,
     atlPeriod = 7,
-    ctlPeriod = 42
+    ctlPeriod = 42,
+    ftp = null
   } = options;
 
+  // Extraer FTP del objeto profile si se pasa directamente
+  const effectiveFTP = ftp || options.ftp || null;
+
   // Ordenar actividades por fecha
-  const sorted = [...activities].sort((a, b) => 
+  const sorted = [...activities].sort((a, b) =>
     new Date(a.start_date || a.date) - new Date(b.start_date || b.date)
   );
 
@@ -53,7 +77,7 @@ function calculatePMC(activities, options = {}) {
   sorted.forEach(act => {
     const date = new Date(act.start_date || act.date);
     const dateKey = date.toISOString().split('T')[0];
-    
+
     if (!dailyTSS[dateKey]) {
       dailyTSS[dateKey] = {
         date: dateKey,
@@ -61,8 +85,8 @@ function calculatePMC(activities, options = {}) {
         activities: []
       };
     }
-    
-    dailyTSS[dateKey].tss += act.tss || 0;
+
+    dailyTSS[dateKey].tss += computeActivityTSS(act, effectiveFTP);
     dailyTSS[dateKey].activities.push(act);
   });
 
@@ -74,7 +98,7 @@ function calculatePMC(activities, options = {}) {
 
   const dateRange = [];
   const currentDate = new Date(firstDate);
-  
+
   while (currentDate <= endDate) {
     const dateKey = currentDate.toISOString().split('T')[0];
     dateRange.push({
@@ -89,12 +113,12 @@ function calculatePMC(activities, options = {}) {
   let atl = initialATL;
   let ctl = initialCTL;
   let previousATL = initialATL;
-  
+
   const pmcData = dateRange.map((day) => {
     // Calcular nuevo ATL y CTL
     atl = calculateEMA(atl, day.tss, atlPeriod);
     ctl = calculateEMA(ctl, day.tss, ctlPeriod);
-    
+
     // TSB = CTL - ATL (del día anterior para evitar efecto inmediato)
     const tsb = ctl - previousATL;
     previousATL = atl;
@@ -152,7 +176,7 @@ function getMonthlySummary(pmcData) {
   const totalTSS = last30Days.reduce((sum, day) => sum + day.tss, 0);
   const avgTSSPerDay = Math.round(totalTSS / 30);
   const workoutDays = last30Days.filter(d => d.tss > 0).length;
-  
+
   // Calcular tendencia de forma (CTL)
   const ctlStart = last30Days[0].ctl;
   const ctlEnd = lastDay.ctl;

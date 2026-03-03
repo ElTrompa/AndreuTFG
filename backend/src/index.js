@@ -16,6 +16,7 @@ app.use('/strava', require('./routes/stravaApi'));
 app.use('/profile', require('./routes/profile'));
 app.use('/advanced', require('./routes/advanced'));
 app.use('/specialized', require('./routes/specialized'));
+app.use('/towns', require('./routes/towns'));
 
 // Initialize database tables
 async function initDatabase() {
@@ -51,11 +52,14 @@ const PORT = process.env.PORT || 3000;
 
 // Initialize DB and start server
 initDatabase().then(() => {
-  app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+  app.listen(PORT, '0.0.0.0', () => console.log(`Server listening on port ${PORT}`));
 });
 
 // Token refresh scheduler
 const { getAthletesToRefresh, refreshAthleteToken } = require('./models/tokens');
+const { computePowerCurve } = require('./models/powerCurves');
+const { getProfile, updateProfileFtp } = require('./models/profiles');
+const { estimateFTPFromPowerCurve } = require('./services/predictions');
 
 async function runRefreshCycle() {
 	try {
@@ -78,3 +82,45 @@ async function runRefreshCycle() {
 // Run once on startup then schedule every 15 minutes
 runRefreshCycle();
 setInterval(runRefreshCycle, 15 * 60 * 1000);
+
+let powerCurveJobRunning = false;
+async function runPowerCurveRefreshCycle() {
+  if (powerCurveJobRunning) return;
+  powerCurveJobRunning = true;
+  try {
+    const pool = await getPool();
+    const [rows] = await pool.query('SELECT athlete_id FROM athletes');
+    if (!rows || rows.length === 0) return;
+
+    for (const row of rows) {
+      const athlete_id = row.athlete_id;
+      try {
+        console.log(`[PowerCurve] Computing power curve for athlete ${athlete_id}`);
+        const data = await computePowerCurve(athlete_id, {
+          perPage: 200,
+          maxPages: 30,
+          batchDelayMs: 200,
+          concurrency: 4
+        });
+
+        const profile = await getProfile(athlete_id);
+        if (!profile || !profile.ftp || profile.ftp <= 0) {
+          const estimate = estimateFTPFromPowerCurve(data);
+          if (estimate && estimate.ftpEstimated > 0) {
+            await updateProfileFtp(athlete_id, estimate.ftpEstimated);
+            console.log(`[PowerCurve] Auto FTP updated for ${athlete_id}: ${estimate.ftpEstimated}W`);
+          }
+        }
+      } catch (err) {
+        console.error(`[PowerCurve] Failed for ${athlete_id}:`, err && err.message ? err.message : err);
+      }
+    }
+  } catch (err) {
+    console.error('[PowerCurve] Refresh cycle error', err && err.message ? err.message : err);
+  } finally {
+    powerCurveJobRunning = false;
+  }
+}
+
+setTimeout(runPowerCurveRefreshCycle, 5000);
+setInterval(runPowerCurveRefreshCycle, 24 * 60 * 60 * 1000);

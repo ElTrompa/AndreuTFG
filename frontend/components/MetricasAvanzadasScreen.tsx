@@ -80,15 +80,20 @@ export default function MetricasAvanzadasScreen({
   const fetchActivities = async () => {
     try {
       const res = await fetch(
-        `${apiBase}/athlete?limit=20`,
+        `${apiBase}/strava/activities?per_page=20`,
         { headers: { Authorization: `Bearer ${jwt}` } }
       );
       if (res.ok) {
         const data = await res.json();
-        setActivities(data.activities || []);
-        if (data.activities?.[0]) {
-          setSelectedActivity(data.activities[0].id);
-          fetchMetrics(data.activities[0].id);
+        const activitiesList = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.activities)
+            ? data.activities
+            : [];
+        setActivities(activitiesList);
+        if (activitiesList[0]) {
+          setSelectedActivity(String(activitiesList[0].id));
+          fetchMetrics(String(activitiesList[0].id));
         }
       }
     } catch (err) {
@@ -123,7 +128,15 @@ export default function MetricasAvanzadasScreen({
         { headers: { Authorization: `Bearer ${jwt}` } }
       );
       if (res.ok) {
-        setTrendData(await res.json());
+        const data = await res.json();
+        const weeklyData = Array.isArray(data?.efficiencyFactor?.weeklyData)
+          ? data.efficiencyFactor.weeklyData
+          : [];
+        setTrendData({
+          weeklyData,
+          trend: data?.efficiencyFactor?.trend || data?.aerobicDecoupling?.trend || 'neutral',
+          summary: data?.efficiencyFactor?.summary || data?.aerobicDecoupling?.summary || 'Sin datos suficientes',
+        });
       }
     } catch (err) {
       console.error('Error fetching trends:', err);
@@ -147,7 +160,7 @@ export default function MetricasAvanzadasScreen({
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>📊 Advanced Metrics</Text>
+        <Text style={styles.title}>📊 Métricas Avanzadas</Text>
       </View>
 
       {/* Activity Selector */}
@@ -186,7 +199,7 @@ export default function MetricasAvanzadasScreen({
           style={[styles.tab, activeTab === 'vi' && styles.activeTab]}
           onPress={() => setActiveTab('vi')}
         >
-          <Text style={[styles.tabText, activeTab === 'vi' && styles.activeTabText]}>VI</Text>
+          <Text style={[styles.tabText, activeTab === 'vi' && styles.activeTabText]}>Variabilidad</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'pacing' && styles.activeTab]}
@@ -195,7 +208,7 @@ export default function MetricasAvanzadasScreen({
           <Text
             style={[styles.tabText, activeTab === 'pacing' && styles.activeTabText]}
           >
-            Pacing
+            Ritmo
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -215,7 +228,7 @@ export default function MetricasAvanzadasScreen({
           <Text
             style={[styles.tabText, activeTab === 'efficiency' && styles.activeTabText]}
           >
-            EF Trend
+            Eficiencia
           </Text>
         </TouchableOpacity>
       </View>
@@ -326,7 +339,7 @@ export default function MetricasAvanzadasScreen({
                   <Text style={styles.cardTitle}>🏆 Peak Power Records</Text>
                   <View style={styles.cardContent}>
                     {metrics.peakPowerRecords.slice(0, 13).map((record, idx) => (
-                      <View key={idx} style={styles.peakRecord}>
+                      <View style={styles.peakRecord}>
                         <View style={styles.peakDuration}>
                           <Text style={styles.peakDurationText}>{record.duration}</Text>
                         </View>
@@ -378,7 +391,7 @@ export default function MetricasAvanzadasScreen({
                       <View style={styles.trendHistory}>
                         <Text style={styles.trendTitle}>Weekly Average:</Text>
                         {trendData.weeklyData.slice(-4).map((week, idx) => (
-                          <View key={idx} style={styles.trendRow}>
+                          <View style={styles.trendRow}>
                             <Text style={styles.trendWeek}>Week {week.week}</Text>
                             <View style={styles.trendBars}>
                               <View style={styles.trendBar}>
