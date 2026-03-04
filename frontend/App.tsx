@@ -20,7 +20,8 @@ import HRVScreen from './components/HRVScreen';
 import TerrainScreen from './components/TerrainScreen';
 import SessionClassifierScreen from './components/SessionClassifierScreen';
 import RoutesSearchScreen from './components/RoutesSearchScreen';
-import { StyleSheet, Text, View, Button, Linking, Alert, ScrollView, TouchableOpacity } from 'react-native';
+
+import { StyleSheet, Text, View, Button, Linking, Alert, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { colors } from './theme';
 
@@ -119,7 +120,7 @@ export default function App() {
 
   // Handle deep links / app scheme callbacks to receive `jwt` or `access_token`
   useEffect(() => {
-    const processUrl = async (url) => {
+    const processUrl = async (url: string | null) => {
       if (!url) return;
       const parts = url.split('?');
       const query = parts[1] || '';
@@ -148,7 +149,7 @@ export default function App() {
     };
 
     Linking.getInitialURL().then(processUrl).catch(() => {});
-    const listener = ({ url }) => processUrl(url);
+    const listener = ({ url }: { url: string }) => processUrl(url);
     const linkingSubscription = Linking.addEventListener('url', listener);
     return () => {
       linkingSubscription?.remove?.();
@@ -212,18 +213,41 @@ export default function App() {
         }
       } catch (e) {}
 
-      // fetch cached or computed power curve
-      try {
-        const pRes = await fetch(`${API_BASE_URL}/strava/power-curve?days=730&per_page=200&max_pages=30&batch_delay_ms=200`, { headers: { Authorization: `Bearer ${jwt}` } });
-        const pJson = await pRes.json();
-        if (pRes.ok && pJson.ok && pJson.data) setPowerData(pJson.data);
-      } catch (e) {
-        // ignore
-      }
     } catch (err) {
       setErrorMsg(String(err));
     } finally {
       setLoading(false);
+    }
+
+    // Cargar curva de potencia en background SIN bloquear la UI
+    // Primero intenta obtener desde caché (instantáneo), si no hay inicia cómputo en background
+    loadPowerCurveBackground(jwt);
+  };
+
+  const loadPowerCurveBackground = async (token: string) => {
+    try {
+      // 1. Intentar obtener datos cacheados (max_age=24h, devuelve rápido si tiene caché)
+      const cachedRes = await fetch(
+        `${API_BASE_URL}/strava/power-curve?max_age_hours=24`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (cachedRes.ok) {
+        const cJson = await cachedRes.json();
+        if (cJson.ok && cJson.data) {
+          setPowerData(cJson.data);
+          if (cJson.cached) return; // Ya tenía caché, no recalcular
+        }
+      }
+
+      // 2. Si no hay caché o caducó, lanzar cómputo en background (no bloquea)
+      // Solo 90 días de datos para que sea rápido
+      fetch(
+        `${API_BASE_URL}/strava/power-curve?days=90&per_page=200&max_pages=5&background=true`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).catch(() => {});
+
+    } catch (e) {
+      // La curva de potencia es opcional, no mostrar error
     }
   };
 
@@ -279,13 +303,16 @@ export default function App() {
 
   if (jwt && screen !== 'Home') {
     return (
-      <View style={styles.fullScreenRoot}>
+      <SafeAreaView style={styles.fullScreenRoot}>
         <HamburgerMenu open={menuOpen} onClose={() => setMenuOpen(false)} navigate={(s:string)=>{ setScreen(s as any); setMenuOpen(false); }} />
 
-        <TouchableOpacity style={{ position:'absolute', left: 18, top: 28, zIndex: 20 }} onPress={() => setMenuOpen(true)}>
-          <SvgXml xml={`<svg width="28" height="22" viewBox="0 0 28 22" xmlns="http://www.w3.org/2000/svg"><rect width="28" height="3" y="0" rx="1.5" fill="#0b4860"/><rect width="28" height="3" y="9" rx="1.5" fill="#0b4860"/><rect width="28" height="3" y="18" rx="1.5" fill="#0b4860"/></svg>`} width={28} height={22} />
-        </TouchableOpacity>
+        <View style={styles.appHeader}>
+          <TouchableOpacity style={styles.hamburgerBtn} onPress={() => setMenuOpen(true)} activeOpacity={0.7}>
+            <SvgXml xml={`<svg width="28" height="22" viewBox="0 0 28 22" xmlns="http://www.w3.org/2000/svg"><rect width="28" height="3" y="0" rx="1.5" fill="#0b4860"/><rect width="28" height="3" y="9" rx="1.5" fill="#0b4860"/><rect width="28" height="3" y="18" rx="1.5" fill="#0b4860"/></svg>`} width={28} height={22} />
+          </TouchableOpacity>
+        </View>
 
+        <View style={{ flex: 1 }}>
         {screen === 'Potencia' && (
           <PotenciaScreen powerMap={powerMap} weightKg={profile && profile.weight_kg ? profile.weight_kg : (athlete && athlete.weight ? athlete.weight : null)} activities={activities} profile={profile} />
         )}
@@ -317,7 +344,8 @@ export default function App() {
             }}
           />
         )}
-      </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -325,7 +353,6 @@ export default function App() {
     <ScrollView contentContainerStyle={styles.container}>
       <SvgXml xml={logoXml} width={120} height={120} style={styles.logo} />
       <Text style={styles.title}>RideMetrics</Text>
-      <Text style={styles.subtitle}>Entrenamiento ciclista — Frontend Expo (TypeScript)</Text>
 
       {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
 
@@ -430,6 +457,20 @@ const styles = StyleSheet.create({
   fullScreenRoot: {
     flex: 1,
     backgroundColor: colors.background,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
+  },
+  appHeader: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  hamburgerBtn: {
+    padding: 14,
+    borderRadius: 8,
   },
   container: {
     flex: 1,

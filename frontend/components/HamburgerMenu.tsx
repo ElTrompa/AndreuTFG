@@ -18,7 +18,7 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
 
   return (
     <View style={styles.backdrop}>
-      <ScrollView style={styles.menu} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.menu} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
         <Text style={styles.title}>🚴 RideMetrics</Text>
         
         {/* Core Navigation */}
@@ -65,7 +65,18 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
           <Text style={styles.itemIcon}>🔮</Text>
           <View>
             <Text style={styles.itemText}>Advanced Analytics</Text>
-            <Text style={styles.itemSubText}>FTP • CP • PMC Forecast • Coach</Text>
+            <Text style={styles.itemSubText}>FTP • CP • PMC Forecast</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.item, styles.premiumItem]} 
+          onPress={() => handleNavigate('RoutesSearch')}
+        >
+          <Text style={styles.itemIcon}>🏘️</Text>
+          <View>
+            <Text style={styles.itemText}>Búsqueda por Pueblos</Text>
+            <Text style={styles.itemSubText}>Encuentra rutas por pueblo</Text>
           </View>
         </TouchableOpacity>
 
@@ -113,17 +124,6 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.item, styles.premiumItem]} 
-          onPress={() => handleNavigate('RoutesSearch')}
-        >
-          <Text style={styles.itemIcon}>🏘️</Text>
-          <View>
-            <Text style={styles.itemText}>Búsqueda por Pueblos</Text>
-            <Text style={styles.itemSubText}>Encuentra rutas por pueblo</Text>
-          </View>
-        </TouchableOpacity>
-
         <View style={{ height: 20 }} />
       </ScrollView>
       <TouchableOpacity style={styles.overlay} onPress={onClose} />
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   menu: { 
     width: 280, 
     backgroundColor: colors.surfaceLight,
-    paddingTop: 16,
+    paddingTop: 60,
     elevation: 8,
   },
   title: { 

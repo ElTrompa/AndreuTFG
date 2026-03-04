@@ -3,7 +3,7 @@
  * Suppresses console warnings about unsupported event handlers
  */
 
-if (typeof window !== 'undefined') {
+if (typeof globalThis !== 'undefined') {
   const originalWarn = console.warn;
   const originalError = console.error;
 

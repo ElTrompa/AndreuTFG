@@ -61,12 +61,11 @@ export default function AdvancedAnalyticsScreen({
   jwt,
   apiBase = 'http://localhost:3001',
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'ftp' | 'pmc' | 'coach'>('ftp');
+  const [activeTab, setActiveTab] = useState<'ftp' | 'pmc'>('ftp');
   const [loading, setLoading] = useState(true);
   const [ftpData, setFtpData] = useState<FTPData | null>(null);
   const [cpData, setCpData] = useState<CriticalPowerData | null>(null);
   const [pmcData, setPmcData] = useState<PMCForecast | null>(null);
-  const [coachData, setCoachData] = useState<DailyRec | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,7 +78,7 @@ export default function AdvancedAnalyticsScreen({
       setError(null);
 
       // Fetch all advanced analytics in parallel
-      const [ftpRes, cpRes, pmcRes, coachRes] = await Promise.all([
+      const [ftpRes, cpRes, pmcRes] = await Promise.all([
         fetch(`${apiBase}/advanced/ftp-prediction`, {
           headers: { Authorization: `Bearer ${jwt}` },
         }),
@@ -96,22 +95,18 @@ export default function AdvancedAnalyticsScreen({
             plannedTSS: [100, 80, 120, 0, 90, 110, 150],
           }),
         }),
-        fetch(`${apiBase}/advanced/daily-recommendation`, {
-          headers: { Authorization: `Bearer ${jwt}` },
-        }),
       ]);
 
       if (ftpRes.ok) setFtpData(await ftpRes.json());
       if (cpRes.ok) setCpData(await cpRes.json());
       if (pmcRes.ok) setPmcData(await pmcRes.json());
-      if (coachRes.ok) setCoachData(await coachRes.json());
 
       if (!ftpRes.ok || !cpRes.ok) {
-        setError('Error loading analytics data');
+        setError('Error al cargar los datos de análisis');
       }
     } catch (err: any) {
       setError(err.message);
-      Alert.alert('Error', 'Failed to load analytics data');
+      Alert.alert('Error', 'No se pudieron cargar los datos de análisis');
     } finally {
       setLoading(false);
     }
@@ -154,15 +149,7 @@ export default function AdvancedAnalyticsScreen({
           onPress={() => setActiveTab('pmc')}
         >
           <Text style={[styles.tabText, activeTab === 'pmc' && styles.activeTabText]}>
-            PMC Forecast
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'coach' && styles.activeTab]}
-          onPress={() => setActiveTab('coach')}
-        >
-          <Text style={[styles.tabText, activeTab === 'coach' && styles.activeTabText]}>
-            Coach
+            Proyección PMC
           </Text>
         </TouchableOpacity>
       </View>
@@ -212,32 +199,37 @@ export default function AdvancedAnalyticsScreen({
             {/* Critical Power Card */}
             {cpData && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>⚡ Critical Power Model</Text>
+                <Text style={styles.cardTitle}>⚡ Modelo de Potencia Crítica</Text>
+                <Text style={styles.cardSubtitle}>
+                  El modelo de potencia crítica te ayuda a entender tu capacidad aeróbica (CP) y anaeróbica (W'). 
+                  CP es la potencia máxima que puedes mantener indefinidamente sin fatigarte, mientras que W' 
+                  representa tu reserva de energía anaeróbica para esfuerzos intensos.
+                </Text>
                 <View style={styles.cardContent}>
                   <View style={[styles.metric, styles.metricDouble]}>
                     <View style={styles.metricHalf}>
-                      <Text style={styles.metricLabel}>CP (Sustainable)</Text>
+                      <Text style={styles.metricLabel}>CP (Sostenible)</Text>
                       <Text style={styles.metricValue}>{cpData.CP}W</Text>
                       <Text style={styles.metricSubtext}>
-                        Power you can sustain indefinitely
+                        Potencia que puedes mantener indefinidamente
                       </Text>
                     </View>
                     <View style={styles.metricHalf}>
-                      <Text style={styles.metricLabel}>W' (Anaerobic)</Text>
+                      <Text style={styles.metricLabel}>W' (Anaeróbico)</Text>
                       <Text style={styles.metricValue}>
                         {(cpData.Wprime / 1000).toFixed(1)}kJ
                       </Text>
                       <Text style={styles.metricSubtext}>
-                        Anaerobic capacity available
+                        Capacidad anaeróbica disponible
                       </Text>
                     </View>
                   </View>
                   <View style={styles.interpretation}>
-                    <Text style={styles.interpretationTitle}>How it works:</Text>
+                    <Text style={styles.interpretationTitle}>Cómo funciona:</Text>
                     <Text style={styles.interpretationText}>
-                      • CP is your theoretical infinite power level{'\n'}
-                      • W' is your anaerobic reserve{'\n'}
-                      • Once W' depletes, you drop to CP
+                      • CP es tu nivel teórico de potencia infinita{'\n'}
+                      • W' es tu reserva anaeróbica{'\n'}
+                      • Una vez que W' se agota, caes a CP
                     </Text>
                   </View>
                 </View>
@@ -250,19 +242,24 @@ export default function AdvancedAnalyticsScreen({
           <View>
             {pmcData && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>📈 PMC Forecast</Text>
+                <Text style={styles.cardTitle}>📈 Proyección PMC</Text>
+                <Text style={styles.cardSubtitle}>
+                  El modelo Performance Management Chart (PMC) te ayuda a gestionar tu forma física. 
+                  CTL (Chronic Training Load) mide tu forma acumulada, ATL (Acute Training Load) mide tu fatiga reciente, 
+                  y TSB (Training Stress Balance) indica tu estado de forma - positivo significa descansado, negativo significa fatigado.
+                </Text>
                 <View style={styles.cardContent}>
                   <View style={styles.currentStatus}>
                     <View style={styles.statusMetric}>
-                      <Text style={styles.statusLabel}>CTL (Fitness)</Text>
+                      <Text style={styles.statusLabel}>CTL (Forma Física)</Text>
                       <Text style={styles.statusValue}>{pmcData.current.CTL.toFixed(1)}</Text>
                     </View>
                     <View style={styles.statusMetric}>
-                      <Text style={styles.statusLabel}>ATL (Fatigue)</Text>
+                      <Text style={styles.statusLabel}>ATL (Fatiga)</Text>
                       <Text style={styles.statusValue}>{pmcData.current.ATL.toFixed(1)}</Text>
                     </View>
                     <View style={styles.statusMetric}>
-                      <Text style={styles.statusLabel}>TSB (Form)</Text>
+                      <Text style={styles.statusLabel}>TSB (Forma)</Text>
                       <Text
                         style={[
                           styles.statusValue,
@@ -275,47 +272,16 @@ export default function AdvancedAnalyticsScreen({
                   </View>
 
                   <View style={styles.forecastTable}>
-                    <Text style={styles.forecastTitle}>7-Day Projection:</Text>
+                    <Text style={styles.forecastTitle}>Proyección de 7 días:</Text>
                     {pmcData.forecast.slice(0, 7).map((day, idx) => (
-                      <View key={idx} style={styles.forecastRow}>
-                        <Text style={styles.forecastDay}>Day {day.day}</Text>
+                      <View style={styles.forecastRow} key={idx}>
+                        <Text style={styles.forecastDay}>Día {day.day}</Text>
                         <Text style={styles.forecastValue}>
                           CTL: {day.CTL.toFixed(1)} | ATL: {day.ATL.toFixed(1)} | TSB:{' '}
                           {day.TSB.toFixed(1)}
                         </Text>
                       </View>
                     ))}
-                  </View>
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {activeTab === 'coach' && (
-          <View>
-            {coachData && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>🎯 Daily Recommendation</Text>
-                <View style={styles.cardContent}>
-                  <View style={styles.recommendation}>
-                    <Text style={styles.recommendationTitle}>Today's Suggestion</Text>
-                    <Text style={styles.recommendationText}>{coachData.recommendation}</Text>
-                  </View>
-
-                  <View style={styles.coachDetails}>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Intensity Zone:</Text>
-                      <Text style={styles.detailValue}>{coachData.intensity}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Suggested Duration:</Text>
-                      <Text style={styles.detailValue}>{coachData.duration}</Text>
-                    </View>
-                    <View style={styles.detailReasonBox}>
-                      <Text style={styles.detailLabel}>Why:</Text>
-                      <Text style={styles.detailReason}>{coachData.reason}</Text>
-                    </View>
                   </View>
                 </View>
               </View>
@@ -408,6 +374,14 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 16,
+      cardSubtitle: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        lineHeight: 18,
+        backgroundColor: colors.surfaceLight,
+      },
     fontWeight: 'bold',
     color: colors.primary,
     paddingHorizontal: 12,
@@ -421,7 +395,9 @@ const styles = StyleSheet.create({
   },
   metric: {
     marginBottom: 12,
-    paddingBottomColor: colors.border,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   metricDouble: {
     flexDirection: 'row',

@@ -4,74 +4,102 @@
  */
 
 /**
+ * Smooth noisy GPS altitude data using rolling average
+ */
+function smoothAltitude(altData, window = 15) {
+  if (!altData || altData.length < window) return altData;
+  const out = new Array(altData.length);
+  for (let i = 0; i < altData.length; i++) {
+    const half = Math.floor(window / 2);
+    const from = Math.max(0, i - half);
+    const to = Math.min(altData.length - 1, i + half);
+    let sum = 0;
+    for (let j = from; j <= to; j++) sum += altData[j];
+    out[i] = sum / (to - from + 1);
+  }
+  return out;
+}
+
+/**
  * Detect climbs from activity streams
  * @param {Array} altitudeData - Altitude in meters
  * @param {Array} distanceData - Distance in meters
- * @param {Object} options - { minGain: 50, minGradient: 3 }
- * @returns {Array} Climb segments
+ * @param {Object} options
  */
 function detectClimbs(altitudeData, distanceData, options = {}) {
-  const { minGain = 50, minGradient = 3 } = options;
+  const { minGain = 30, minGradient = 2.5, minDistanceM = 500, gapTolerance = 25 } = options;
 
   if (!altitudeData || !distanceData || altitudeData.length < 10) {
     return [];
   }
 
+  // Smooth altitude to reduce GPS noise
+  const alt = smoothAltitude(altitudeData, 15);
+  const dist = distanceData;
+
   const climbs = [];
   let climbStart = null;
   let startAlt = null;
   let startDist = null;
+  let flatCount = 0; // allow brief flat/descent sections
 
-  for (let i = 1; i < altitudeData.length; i++) {
-    const altGain = altitudeData[i] - altitudeData[i - 1];
-    const distGain = distanceData[i] - distanceData[i - 1];
+  for (let i = 1; i < alt.length; i++) {
+    const altGain = alt[i] - alt[i - 1];
+    const distGain = dist[i] - dist[i - 1];
     const gradient = distGain > 0 ? (altGain / distGain) * 100 : 0;
 
     if (gradient >= minGradient) {
       if (climbStart === null) {
         climbStart = i - 1;
-        startAlt = altitudeData[i - 1];
-        startDist = distanceData[i - 1];
+        startAlt = alt[i - 1];
+        startDist = dist[i - 1];
       }
+      flatCount = 0; // reset gap counter inside a good climb
     } else {
       if (climbStart !== null) {
-        const endAlt = altitudeData[i - 1];
-        const endDist = distanceData[i - 1];
-        const gain = endAlt - startAlt;
-        const distance = endDist - startDist;
-        const avgGradient = (gain / distance) * 100;
+        flatCount++;
+        // Allow up to gapTolerance consecutive "non-climb" samples (GPS noise, brief flat)
+        if (flatCount > gapTolerance) {
+          const endIdx = i - flatCount - 1;
+          const endAlt = alt[endIdx];
+          const endDist = dist[endIdx];
+          const gain = endAlt - startAlt;
+          const distance = endDist - startDist;
 
-        if (gain >= minGain) {
-          climbs.push({
-            startIndex: climbStart,
-            endIndex: i - 1,
-            elevationGain: Math.round(gain),
-            distance: Math.round(distance),
-            avgGradient: avgGradient.toFixed(1),
-            startElevation: Math.round(startAlt),
-            endElevation: Math.round(endAlt)
-          });
+          if (gain >= minGain && distance >= minDistanceM) {
+            const avgGradient = distance > 0 ? (gain / distance) * 100 : 0;
+            climbs.push({
+              startIndex: climbStart,
+              endIndex: endIdx,
+              elevationGain: Math.round(gain),
+              distance: Math.round(distance),
+              avgGradient: avgGradient.toFixed(1),
+              startElevation: Math.round(startAlt),
+              endElevation: Math.round(endAlt)
+            });
+          }
+          climbStart = null;
+          flatCount = 0;
         }
-
-        climbStart = null;
       }
     }
   }
 
-  // Handle climb that goes to end of activity
+  // Handle climb that goes to end
   if (climbStart !== null) {
-    const endAlt = altitudeData[altitudeData.length - 1];
-    const endDist = distanceData[distanceData.length - 1];
+    const endAlt = alt[alt.length - 1];
+    const endDist = dist[dist.length - 1];
     const gain = endAlt - startAlt;
     const distance = endDist - startDist;
 
-    if (gain >= minGain) {
+    if (gain >= minGain && distance >= minDistanceM) {
+      const avgGradient = distance > 0 ? (gain / distance) * 100 : 0;
       climbs.push({
         startIndex: climbStart,
-        endIndex: altitudeData.length - 1,
+        endIndex: alt.length - 1,
         elevationGain: Math.round(gain),
         distance: Math.round(distance),
-        avgGradient: ((gain / distance) * 100).toFixed(1),
+        avgGradient: avgGradient.toFixed(1),
         startElevation: Math.round(startAlt),
         endElevation: Math.round(endAlt)
       });

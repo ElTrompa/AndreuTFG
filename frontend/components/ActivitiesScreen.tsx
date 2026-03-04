@@ -168,7 +168,7 @@ export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001
         const { carbsPct, fatsPct } = estimateCaloriesBreakdown(avg, avgHR, profile);
 
         return (
-          <View style={styles.card}>
+          <View key={id} style={styles.card}>
             <TouchableOpacity onPress={() => onSelectActivity(id)}>
               <View style={styles.rowTop}>
                 <Text style={styles.name}>{act.name}</Text>
@@ -179,21 +179,21 @@ export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001
             {openId===id && (
               <View style={styles.expanded}>
                 <Text>Duración: {secondsToHhMm(duration)}</Text>
-                <Text>Avg power: {Math.round(avg)} W</Text>
+                <Text>Potencia media: {Math.round(avg)} W</Text>
                 <Text>NP: {npComputed ? Math.round(npComputed) + ' W (calc)' : (avg ? Math.round(computeApproxNP(avg, duration)) + ' W (est)' : '—')}</Text>
-                <Text>Energy: {kj ? `${kj} kJ` : (calories ? `${Math.round(calories)} kcal` : '—')}</Text>
-                <Text>Calorias ≈ Carbs {carbsPct}% · Fats {fatsPct}%</Text>
+                <Text>Energía: {kj ? `${kj} kJ` : (calories ? `${Math.round(calories)} kcal` : '—')}</Text>
+                <Text>Calorías ≈ H.Carbono {carbsPct}% · Grasa {fatsPct}%</Text>
 
                 {/* Power vs time and histogram if streams available */}
                 {streamData && Array.isArray(streamData.watts) && streamData.watts.length > 0 ? (
                   <View style={{marginTop:8}}>
-                    <Text style={{fontWeight:'700'}}>Power vs time</Text>
+                    <Text style={{fontWeight:'700'}}>Potencia vs tiempo</Text>
                     <Svg width="100%" height={80} viewBox={`0 0 300 80`}>
                       <G>
                         {renderSparkline(streamData.watts, 260, 40, 20)}
                       </G>
                     </Svg>
-                    <Text style={{fontWeight:'700', marginTop:6}}>Histogram</Text>
+                    <Text style={{fontWeight:'700', marginTop:6}}>Histograma</Text>
                     <Svg width="100%" height={120} viewBox={`0 0 300 120`}>
                       <G>
                         {renderHistogram(streamData.watts, 6, 260, 18, 20)}
@@ -263,7 +263,7 @@ function renderHistogram(values:number[], buckets:number, width:number, barHeigh
     const h = Math.round((c/maxCount) * barHeight);
     const x = 20 + i * bucketWidth;
     const y = offsetY + (barHeight - h);
-    return <Rect x={x} y={y} width={Math.max(6, Math.round(bucketWidth-4))} height={h} fill={'#6bd6a9'} rx={3} />;
+    return <Rect key={i} x={x} y={y} width={Math.max(6, Math.round(bucketWidth-4))} height={h} fill={'#6bd6a9'} rx={3} />;
   });
   return bars;
 }

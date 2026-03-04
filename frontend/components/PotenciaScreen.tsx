@@ -169,7 +169,7 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
   },[]);
 
   const renderCategory = (name:string, list:string[])=> (
-    <View style={styles.category} key={name}>
+    <View style={styles.category}>
       <TouchableOpacity style={styles.catHeader} onPress={()=>{ LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setOpenCat(openCat===name? null : (name as any)); }}>
         <Text style={styles.catTitle}>{name}</Text>
         <Text style={styles.catToggle}>{openCat===name ? '▾' : '▸'}</Text>
@@ -179,23 +179,25 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
           {list.map(d=>{
             const r = rows.find(rr=>rr.d===d)!;
             return (
-              <View key={d} style={styles.row}>
-                <View style={styles.rowLeft}>
-                  <Text style={styles.duration}>{r.d}</Text>
-                  <Text style={styles.wval}>{Math.round(r.v)} W{r.wkg !== undefined ? ` · ${r.wkg} W/kg` : ''}</Text>
-                </View>
-                <View style={styles.rowRight}>
-                  <Text style={styles.levelText}>Nivel {r.level} — {r.name}</Text>
-                  {r.missingW > 0 ? (
-                    <Text style={styles.missing}>Faltan {r.missingW} W{r.missingWkg ? ` (${r.missingWkg} W/kg)` : ''} para subir</Text>
-                  ) : (
-                    <Text style={[styles.missing, {color: '#2ecc71', fontWeight: '600'}]}>¡Nivel máximo! 🏆</Text>
-                  )}
-                  <View style={styles.progressBar}>
-                    <View style={[styles.progressFill, { width: Math.max(6, Math.round(r.progress * 100)) + '%' }]} />
+              <React.Fragment key={d}>
+                <View style={styles.row}>
+                  <View style={styles.rowLeft}>
+                    <Text style={styles.duration}>{r.d}</Text>
+                    <Text style={styles.wval}>{Math.round(r.v)} W{r.wkg !== undefined ? ` · ${r.wkg} W/kg` : ''}</Text>
+                  </View>
+                  <View style={styles.rowRight}>
+                    <Text style={styles.levelText}>Nivel {r.level} — {r.name}</Text>
+                    {r.missingW > 0 ? (
+                      <Text style={styles.missing}>Faltan {r.missingW} W{r.missingWkg ? ` (${r.missingWkg} W/kg)` : ''} para subir</Text>
+                    ) : (
+                      <Text style={[styles.missing, {color: '#2ecc71', fontWeight: '600'}]}>¡Nivel máximo! 🏆</Text>
+                    )}
+                    <View style={styles.progressBar}>
+                      <View style={[styles.progressFill, { width: `${Math.max(6, Math.round(r.progress * 100))}%` as any }]} />
+                    </View>
                   </View>
                 </View>
-              </View>
+              </React.Fragment>
             );
           })}
         </View>
@@ -216,14 +218,18 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
         <View style={{marginTop: 12}}>
           <Text style={styles.profileSubtitle}>💪 Fortalezas:</Text>
           {cyclistProfile.strengths.map((s, i) => (
-            <Text key={i} style={styles.profileListItem}>• {s}</Text>
+            <React.Fragment key={i}>
+              <Text style={styles.profileListItem}>• {s}</Text>
+            </React.Fragment>
           ))}
         </View>
         
         <View style={{marginTop: 8}}>
           <Text style={styles.profileSubtitle}>🎯 A mejorar:</Text>
           {cyclistProfile.improvements.map((s, i) => (
-            <Text key={i} style={styles.profileListItem}>• {s}</Text>
+            <React.Fragment key={i}>
+              <Text style={styles.profileListItem}>• {s}</Text>
+            </React.Fragment>
           ))}
         </View>
       </View>

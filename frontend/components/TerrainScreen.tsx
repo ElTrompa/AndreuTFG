@@ -49,8 +49,10 @@ interface FamousClimb {
   distance: number;
   gain: number;
   avgGrade: number;
+  maxGrade?: number;
   proRecord: string;
-  projectedTime: string;
+  proRecordWkg?: number;
+  projectedTime?: string | null;
   difficulty: string;
   advice: string;
 }
@@ -66,6 +68,7 @@ export default function TerrainScreen({
   const [famousClimbs, setFamousClimbs] = useState<FamousClimb[]>([]);
   const [selectedClimb, setSelectedClimb] = useState<FamousClimb | null>(null);
   const [projectedTime, setProjectedTime] = useState<string | null>(null);
+  const [athleteSimData, setAthleteSimData] = useState<{ftp:number; weight:number; wkg:string; profileComplete:boolean} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activities, setActivities] = useState<any[]>([]);
   const [selectedActivity, setSelectedActivity] = useState(activityId);
@@ -122,22 +125,22 @@ export default function TerrainScreen({
 
         const normalized = climbsRaw.map((climb: any, idx: number) => ({
           id: String(climb.id || idx),
-          name: climb.name || `Climb ${idx + 1}`,
+          name: climb.name || `Puerto ${idx + 1}`,
           distance: Number(climb.distance || 0),
           gain: Number(climb.gain || climb.elevationGain || 0),
           avgGrade: Number(climb.avgGrade || climb.avgGradient || 0),
           maxGrade: Number(climb.maxGrade || climb.max_gradient || climb.avgGrade || 0),
-          category: String(climb.category || 'cat4'),
-          powerAvg: Number(climb.powerAvg || climb.avgPower || 0),
-          weightedWkg: Number(climb.weightedWkg || climb.wkg || 0),
-          VAM: Number(climb.VAM || climb.vam || 0),
-          time: Number(climb.time || climb.duration || 0),
+          category: String(climb.category || climb.power?.category || 'cat4'),
+          powerAvg: Number(climb.powerAvg || climb.avgPower || climb.power?.avgPower || 0),
+          weightedWkg: Number(climb.weightedWkg || climb.wkg || climb.power?.wPerKg || 0),
+          VAM: Number(climb.VAM || climb.vam || climb.power?.vam || 0),
+          time: Number(climb.time || climb.duration || climb.power?.duration || 0),
           difficulty: String(climb.difficulty || 'moderate'),
         }));
 
         setClimbs(normalized);
       } else {
-        setError('No climbs detected in this activity');
+        setError('No se han detectado puertos en esta actividad');
       }
     } catch (err: any) {
       setError(err.message);
@@ -175,15 +178,52 @@ export default function TerrainScreen({
       );
       if (res.ok) {
         const data = await res.json();
-        const climbData = data?.simulation?.climb || data?.climb || null;
-        const projected = data?.simulation?.simulation?.timeFormatted || data?.projectedTime || null;
+        const sim = data?.simulation;
+        const climbRaw = sim?.climb;
+        const simResult = sim?.simulation;
+        const proRec = sim?.proRecord;
+        const comparison = sim?.comparison;
+
+        // Build advice/comparison text
+        let adviceText = '';
+        if (!data?.athlete?.profileComplete) {
+          adviceText = '⚠️ Usando valores por defecto (FTP 200W, peso 70kg). Configura tu perfil para una estimación real.';
+        } else if (comparison) {
+          if (comparison.percentSlower) {
+            adviceText = `Vas ${comparison.percentSlower}% más lento que el récord pro (${comparison.timeDifferenceFormatted} más).`;
+          } else if (comparison.percentFaster) {
+            adviceText = `¡Eres ${comparison.percentFaster}% más rápido que el récord pro!`;
+          }
+        }
+
+        // Build a FamousClimb from the simulate response
+        const climbData: FamousClimb = {
+          id: climbId,
+          name: climbRaw?.name || climbId,
+          country: climbRaw?.country || '',
+          distance: Math.round((climbRaw?.distance || 0) / 100) / 10, // m → km
+          gain: climbRaw?.elevationGain || 0,
+          avgGrade: climbRaw?.avgGradient || 0,
+          proRecord: proRec ? `${proRec.name} · ${proRec.timeFormatted}` : '',
+          projectedTime: simResult?.timeFormatted || null,
+          difficulty: '',
+          advice: adviceText,
+        };
+
         setSelectedClimb(climbData);
-        setProjectedTime(projected);
+        setProjectedTime(simResult?.timeFormatted || null);
+        setAthleteSimData(data?.athlete ? {
+          ftp: data.athlete.ftp,
+          weight: data.athlete.weight,
+          wkg: data.athlete.wkg,
+          profileComplete: data.athlete.profileComplete !== false,
+        } : null);
       } else {
-        Alert.alert('Error', 'Could not simulate climb');
+        const errData = await res.json().catch(() => ({}));
+        Alert.alert('Error', errData?.error || 'No se pudo simular el puerto');
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to load simulation');
+      Alert.alert('Error', 'Error al cargar la simulación');
     } finally {
       setLoading(false);
     }
@@ -323,55 +363,55 @@ export default function TerrainScreen({
                   <View style={styles.cardContent}>
                     <View style={styles.climbMetricsGrid}>
                       <View style={styles.gridItem}>
-                        <Text style={styles.metricLabel}>Distance</Text>
+                        <Text style={styles.metricLabel}>Distancia</Text>
                         <Text style={styles.metricValue}>
-                          {climb.distance.toFixed(1)}km
+                          {(Number(climb?.distance || 0) / 1000).toFixed(1)}km
                         </Text>
                       </View>
                       <View style={styles.gridItem}>
-                        <Text style={styles.metricLabel}>Ascent</Text>
-                        <Text style={styles.metricValue}>{climb.gain.toFixed(0)}m</Text>
+                        <Text style={styles.metricLabel}>Ascenso</Text>
+                        <Text style={styles.metricValue}>{Number(climb?.gain || 0).toFixed(0)}m</Text>
                       </View>
                       <View style={styles.gridItem}>
-                        <Text style={styles.metricLabel}>Avg Grade</Text>
-                        <Text style={styles.metricValue}>{climb.avgGrade.toFixed(1)}%</Text>
+                        <Text style={styles.metricLabel}>Pendiente Media</Text>
+                        <Text style={styles.metricValue}>{Number(climb?.avgGrade || 0).toFixed(1)}%</Text>
                       </View>
                       <View style={styles.gridItem}>
-                        <Text style={styles.metricLabel}>Max Grade</Text>
-                        <Text style={styles.metricValue}>{climb.maxGrade.toFixed(1)}%</Text>
+                        <Text style={styles.metricLabel}>Pendiente Máx</Text>
+                        <Text style={styles.metricValue}>{Number(climb?.maxGrade || 0).toFixed(1)}%</Text>
                       </View>
                     </View>
 
                     <View style={styles.climbPerformance}>
-                      <Text style={styles.performanceTitle}>Performance Metrics:</Text>
+                      <Text style={styles.performanceTitle}>Métricas de Rendimiento:</Text>
                       <View style={styles.performanceRow}>
-                        <Text style={styles.performanceLabel}>Avg Power</Text>
+                        <Text style={styles.performanceLabel}>Potencia Media</Text>
                         <Text style={styles.performanceValue}>
-                          {climb.powerAvg.toFixed(0)}W
+                          {Number(climb?.powerAvg || 0).toFixed(0)}W
                         </Text>
                       </View>
                       <View style={styles.performanceRow}>
                         <Text style={styles.performanceLabel}>W/kg</Text>
                         <Text style={styles.performanceValue}>
-                          {climb.weightedWkg.toFixed(2)} W/kg
+                          {Number(climb?.weightedWkg || 0).toFixed(2)} W/kg
                         </Text>
                       </View>
                       <View style={styles.performanceRow}>
                         <Text style={styles.performanceLabel}>VAM</Text>
                         <Text style={styles.performanceValue}>
-                          {climb.VAM.toFixed(0)} m/h
+                          {Number(climb?.VAM || 0).toFixed(0)} m/h
                         </Text>
                       </View>
                       <View style={styles.performanceRow}>
-                        <Text style={styles.performanceLabel}>Time</Text>
+                        <Text style={styles.performanceLabel}>Tiempo</Text>
                         <Text style={styles.performanceValue}>
-                          {Math.floor(climb.time / 60)}:{(climb.time % 60).toString().padStart(2, '0')}
+                          {Math.floor(Number(climb?.time || 0) / 60)}:{(Number(climb?.time || 0) % 60).toString().padStart(2, '0')}
                         </Text>
                       </View>
                     </View>
 
                     <View style={styles.difficultyBox}>
-                      <Text style={styles.difficultyTitle}>Difficulty: {climb.difficulty}</Text>
+                      <Text style={styles.difficultyTitle}>Dificultad: {climb.difficulty}</Text>
                     </View>
                   </View>
                 </View>
@@ -380,8 +420,8 @@ export default function TerrainScreen({
               <View style={styles.card}>
                 <View style={styles.cardContent}>
                   <Text style={styles.noClimbsText}>
-                    ℹ️ No climbs detected in this activity.{'\n'}
-                    Try selecting an activity with elevation gain.
+                    ℹ️ No se han detectado puertos en esta actividad.{'\n'}
+                    Prueba con una actividad que tenga desnivel positivo.
                   </Text>
                 </View>
               </View>
@@ -404,65 +444,101 @@ export default function TerrainScreen({
                   <View style={styles.cardContent}>
                     <View style={styles.climbMetricsGrid}>
                       <View style={styles.gridItem}>
-                        <Text style={styles.metricLabel}>Distance</Text>
+                        <Text style={styles.metricLabel}>Distancia</Text>
                         <Text style={styles.metricValue}>
-                          {selectedClimb.distance.toFixed(1)}km
+                          {Number(selectedClimb?.distance || 0).toFixed(1)}km
                         </Text>
                       </View>
                       <View style={styles.gridItem}>
-                        <Text style={styles.metricLabel}>Ascent</Text>
-                        <Text style={styles.metricValue}>{selectedClimb.gain.toFixed(0)}m</Text>
+                        <Text style={styles.metricLabel}>Desnivel</Text>
+                        <Text style={styles.metricValue}>{Number(selectedClimb?.gain || 0).toFixed(0)}m</Text>
                       </View>
                       <View style={styles.gridItem}>
-                        <Text style={styles.metricLabel}>Avg Grade</Text>
+                        <Text style={styles.metricLabel}>Pendiente media</Text>
                         <Text style={styles.metricValue}>
-                          {selectedClimb.avgGrade.toFixed(1)}%
+                          {Number(selectedClimb?.avgGrade || 0).toFixed(1)}%
                         </Text>
                       </View>
                     </View>
 
                     <View style={styles.simulationBox}>
-                      <Text style={styles.simulationTitle}>🚴 Simulation Results</Text>
+                      <Text style={styles.simulationTitle}>🚴 Resultado de la simulación</Text>
                       <View style={styles.timeComparison}>
                         <View style={styles.timeBlock}>
-                          <Text style={styles.timeLabel}>Your Time</Text>
-                          <Text style={styles.timeValue}>{projectedTime}</Text>
+                          <Text style={styles.timeLabel}>Tu tiempo estimado</Text>
+                          <Text style={styles.timeValue}>{projectedTime || 'N/A'}</Text>
                         </View>
-                        <View style={styles.timeBlock}>
-                          <Text style={styles.timeLabel}>Pro Record</Text>
-                          <Text style={styles.timeValue}>{selectedClimb.proRecord}</Text>
-                        </View>
+                        {selectedClimb?.proRecord && (
+                          <View style={styles.timeBlock}>
+                            <Text style={styles.timeLabel}>Récord pro</Text>
+                            <Text style={styles.timeValue}>{selectedClimb.proRecord}</Text>
+                          </View>
+                        )}
                       </View>
+
+                      {athleteSimData && (
+                        <View style={styles.athleteStatsBox}>
+                          <Text style={styles.athleteStatsTitle}>⚡ Tus datos de potencia</Text>
+                          <View style={styles.athleteStatsRow}>
+                            <View style={styles.athleteStatItem}>
+                              <Text style={styles.athleteStatLabel}>FTP</Text>
+                              <Text style={styles.athleteStatValue}>{athleteSimData.ftp}W</Text>
+                              {!athleteSimData.profileComplete && (
+                                <Text style={styles.athleteStatHint}>estimado</Text>
+                              )}
+                            </View>
+                            <View style={styles.athleteStatItem}>
+                              <Text style={styles.athleteStatLabel}>Peso</Text>
+                              <Text style={styles.athleteStatValue}>{athleteSimData.weight}kg</Text>
+                              {!athleteSimData.profileComplete && (
+                                <Text style={styles.athleteStatHint}>estimado</Text>
+                              )}
+                            </View>
+                            <View style={styles.athleteStatItem}>
+                              <Text style={styles.athleteStatLabel}>W/kg</Text>
+                              <Text style={styles.athleteStatValue}>{athleteSimData.wkg}</Text>
+                            </View>
+                          </View>
+                          {!athleteSimData.profileComplete && (
+                            <Text style={styles.profileWarning}>
+                              ⚠️ Configura tu FTP y peso real en Perfil para simulaciones más precisas
+                            </Text>
+                          )}
+                        </View>
+                      )}
                     </View>
 
-                    <View style={styles.advice}>
-                      <Text style={styles.adviceTitle}>💡 Recommendation:</Text>
-                      <Text style={styles.adviceText}>{selectedClimb.advice}</Text>
-                    </View>
+                    {selectedClimb?.advice && (
+                      <View style={styles.advice}>
+                        <Text style={styles.adviceTitle}>💡 Comparativa:</Text>
+                        <Text style={styles.adviceText}>{selectedClimb.advice}</Text>
+                      </View>
+                    )}
 
                     <TouchableOpacity
                       style={styles.backBtn}
                       onPress={() => {
                         setSelectedClimb(null);
                         setProjectedTime(null);
+                        setAthleteSimData(null);
                       }}
                     >
-                      <Text style={styles.backBtnText}>← Back to Catalog</Text>
+                      <Text style={styles.backBtnText}>← Volver al catálogo</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               </View>
             ) : (
               <View>
-                <Text style={styles.sectionTitle}>Famous Climbs Catalog</Text>
-                {famousClimbs.map((climb) => (
-                  <View style={styles.climbItem}>
+                <Text style={styles.sectionTitle}>Catálogo de Puertos Famosos</Text>
+                {famousClimbs.map((climb, idx) => (
+                  <View key={`climb-${idx}`} style={styles.climbItem}>
                     <View style={styles.climbItemContent}>
                       <Text style={styles.climbItemName}>{climb.name}</Text>
                       <Text style={styles.climbItemLocation}>{climb.country}</Text>
                       <View style={styles.climbItemMetrics}>
                         <Text style={styles.climbItemMetric}>
-                          {climb.distance.toFixed(1)}km • {climb.gain.toFixed(0)}m • {climb.avgGrade.toFixed(1)}%
+                          {Number(climb?.distance || 0).toFixed(1)}km • {Number(climb?.gain || 0).toFixed(0)}m • {Number(climb?.avgGrade || 0).toFixed(1)}%
                         </Text>
                       </View>
                     </View>
@@ -470,7 +546,7 @@ export default function TerrainScreen({
                       style={styles.simulateBtn}
                       onPress={() => handleSimulateClimb(climb.id)}
                     >
-                      <Text style={styles.simulateBtnText}>Simulate</Text>
+                      <Text style={styles.simulateBtnText}>Simular</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -810,5 +886,48 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 13,
+  },
+  athleteStatsBox: {
+    marginTop: 12,
+    backgroundColor: '#0b4860' + '18',
+    borderRadius: 8,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  athleteStatsTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 8,
+  },
+  athleteStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  athleteStatItem: {
+    alignItems: 'center',
+  },
+  athleteStatLabel: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginBottom: 2,
+  },
+  athleteStatValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+  },
+  athleteStatHint: {
+    fontSize: 9,
+    color: '#f39c12',
+    marginTop: 1,
+  },
+  profileWarning: {
+    fontSize: 10,
+    color: '#f39c12',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 14,
   },
 });

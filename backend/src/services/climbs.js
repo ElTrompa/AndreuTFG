@@ -263,14 +263,12 @@ function getAllClimbs() {
     id,
     name: climb.name,
     country: climb.country,
-    distance: (climb.distance / 1000).toFixed(1) + ' km',
-    elevationGain: climb.elevationGain + ' m',
-    avgGradient: climb.avgGradient + '%',
-    proRecord: {
-      rider: climb.proRecord.name,
-      time: formatTime(climb.proRecord.time),
-      wPerKg: climb.proRecord.wPerKg
-    }
+    distance: Math.round(climb.distance / 100) / 10,  // km as number e.g. 13.8
+    gain: climb.elevationGain,                          // meters as number
+    avgGrade: climb.avgGradient,                        // % as number
+    maxGrade: climb.maxGradient,
+    proRecord: `${climb.proRecord.name} · ${formatTime(climb.proRecord.time)}`,  // string
+    proRecordWkg: climb.proRecord.wPerKg
   }));
 }
 

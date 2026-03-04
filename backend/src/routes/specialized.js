@@ -16,6 +16,11 @@ const {
   recommendClimbs,
   getAllClimbs
 } = require('../services/climbs');
+const {
+  getDailyRecommendation,
+  detectOvertraining,
+  generateWeeklyPlan
+} = require('../services/coaching');
 const strava = require('../services/strava');
 const { getProfile } = require('../models/profiles');
 const { calculatePMC } = require('../services/pmc');
@@ -206,7 +211,7 @@ router.get('/terrain/:activityId', async (req, res) => {
     }
 
     const profile = await getProfile(athlete_id);
-    const weight = profile?.weight || 70; // Default 70kg
+    const weight = profile?.weight_kg || 70; // Default 70kg
 
     const analysis = analyzeActivityTerrain(streams, weight);
 
@@ -229,17 +234,15 @@ router.get('/climbs/simulate/:climbId', async (req, res) => {
 
   try {
     const profile = await getProfile(athlete_id);
-    
-    if (!profile || !profile.ftp || !profile.weight) {
-      return res.status(400).json({ 
-        error: 'Athlete profile with FTP and weight required' 
-      });
-    }
+
+    const athleteFtp = profile?.ftp || 200;       // Default 200W
+    const athleteWeight = profile?.weight_kg || 70; // Default 70kg
+    const profileComplete = !!(profile?.ftp && profile?.weight_kg);
 
     // Use provided power or default to FTP
-    const power = req.query.power ? parseInt(req.query.power) : profile.ftp;
+    const power = req.query.power ? parseInt(req.query.power) : athleteFtp;
 
-    const simulation = simulateClimb(req.params.climbId, power, profile.weight);
+    const simulation = simulateClimb(req.params.climbId, power, athleteWeight);
 
     if (simulation.error) {
       return res.status(404).json(simulation);
@@ -247,9 +250,10 @@ router.get('/climbs/simulate/:climbId', async (req, res) => {
 
     res.json({
       athlete: {
-        ftp: profile.ftp,
-        weight: profile.weight,
-        wkg: (profile.ftp / profile.weight).toFixed(2)
+        ftp: athleteFtp,
+        weight: athleteWeight,
+        wkg: (athleteFtp / athleteWeight).toFixed(2),
+        profileComplete
       },
       simulation
     });
@@ -285,30 +289,68 @@ router.get('/climbs/recommendations', async (req, res) => {
   try {
     const profile = await getProfile(athlete_id);
     
-    if (!profile || !profile.ftp || !profile.weight) {
-      return res.status(400).json({ 
-        error: 'Athlete profile with FTP and weight required' 
-      });
-    }
+    const athleteFtp2 = profile?.ftp || 200;
+    const athleteWeight2 = profile?.weight_kg || 70;
 
     const preferredGradient = req.query.gradient ? parseFloat(req.query.gradient) : null;
 
     const recommendations = recommendClimbs({
-      ftp: profile.ftp,
-      weight: profile.weight,
+      ftp: athleteFtp2,
+      weight: athleteWeight2,
       preferredGradient
     });
 
     res.json({
       athlete: {
-        ftp: profile.ftp,
-        weight: profile.weight,
-        wkg: (profile.ftp / profile.weight).toFixed(2)
+        ftp: athleteFtp2,
+        weight: athleteWeight2,
+        wkg: (athleteFtp2 / athleteWeight2).toFixed(2)
       },
       recommendations
     });
   } catch (err) {
     console.error('[Climb Recommendations] Error:', err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
+ * 🏋️ COACHING - Daily Training Recommendation
+ * Based on PMC status and power zones
+ */
+router.get('/coaching', async (req, res) => {
+  const athlete_id = extractAthleteId(req);
+  if (!athlete_id) return res.status(400).json({ error: 'Missing athlete_id' });
+
+  try {
+    const profile = await getProfile(athlete_id);
+
+    // Get PMC data (defaults to 0 if no activities)
+    const pmc = await calculatePMC(athlete_id);
+    const pmcStatus = {
+      CTL: pmc.current_ctl || 0,
+      ATL: pmc.current_atl || 0,
+      TSB: pmc.current_tsb || 0
+    };
+
+    // Get recent activities for context
+    const recentActivities = await strava.getActivities(athlete_id, { per_page: 30 });
+
+    // Get coaching recommendation (works even without profile)
+    const recommendation = getDailyRecommendation(pmcStatus, profile || {}, recentActivities);
+
+    res.json({
+      ok: true,
+      recommendation,
+      pmcStatus,
+      profile: {
+        ftp: profile?.ftp || null,
+        weight: profile?.weight_kg || null,
+        wkg: profile?.ftp && profile?.weight_kg ? (profile.ftp / profile.weight_kg).toFixed(2) : null
+      }
+    });
+  } catch (err) {
+    console.error('[Coaching] Error:', err);
     res.status(500).json({ error: String(err) });
   }
 });

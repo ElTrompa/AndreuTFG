@@ -219,7 +219,7 @@ export default function SessionClassifierScreen({
               activeTab === 'classification' && styles.activeTabText,
             ]}
           >
-            Classification
+            Clasificación
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -229,7 +229,7 @@ export default function SessionClassifierScreen({
           <Text
             style={[styles.tabText, activeTab === 'distribution' && styles.activeTabText]}
           >
-            Distribution
+            Distribución
           </Text>
         </TouchableOpacity>
       </View>
@@ -268,51 +268,72 @@ export default function SessionClassifierScreen({
                   >
                     {(classification.confidence * 100).toFixed(0)}%
                   </Text>
-                  <Text style={styles.confidenceLabel}>Confidence</Text>
+                  <Text style={styles.confidenceLabel}>Confianza</Text>
                 </View>
               </View>
 
               <View style={styles.cardContent}>
                 <View style={styles.featuresList}>
-                  <Text style={styles.featuresTitle}>Session Features:</Text>
+                  <Text style={styles.featuresTitle}>Métricas de la sesión:</Text>
                   <View style={styles.featureRow}>
-                    <Text style={styles.featureLabel}>Intensity Factor (IF)</Text>
+                    <View style={styles.featureLabelCol}>
+                      <Text style={styles.featureLabel}>IF (Factor Intensidad)</Text>
+                      <Text style={styles.featureHint}>NP ÷ FTP — &lt;0.75 suave, &gt;1.0 muy duro</Text>
+                    </View>
                     <Text style={styles.featureValue}>
                       {classification.features.IF.toFixed(2)}
                     </Text>
                   </View>
                   <View style={styles.featureRow}>
-                    <Text style={styles.featureLabel}>Variability Index (VI)</Text>
+                    <View style={styles.featureLabelCol}>
+                      <Text style={styles.featureLabel}>VI (Índice Variabilidad)</Text>
+                      <Text style={styles.featureHint}>NP ÷ Pot. Media — 1.0=constante, &gt;1.05=esfuerzos</Text>
+                    </View>
                     <Text style={styles.featureValue}>
                       {classification.features.VI.toFixed(2)}
                     </Text>
                   </View>
                   <View style={styles.featureRow}>
-                    <Text style={styles.featureLabel}>Time in Z5 (Anaerobic)</Text>
+                    <View style={styles.featureLabelCol}>
+                      <Text style={styles.featureLabel}>Z5 — Anaeróbico</Text>
+                      <Text style={styles.featureHint}>120-150% FTP: esprints y ataques</Text>
+                    </View>
                     <Text style={styles.featureValue}>
                       {Math.round(classification.features.timeInZ5)}min
                     </Text>
                   </View>
                   <View style={styles.featureRow}>
-                    <Text style={styles.featureLabel}>Time in Z4 (VO2max)</Text>
+                    <View style={styles.featureLabelCol}>
+                      <Text style={styles.featureLabel}>Z4 — VO2max</Text>
+                      <Text style={styles.featureHint}>105-120% FTP: intervals cortos y duros</Text>
+                    </View>
                     <Text style={styles.featureValue}>
                       {Math.round(classification.features.timeInZ4)}min
                     </Text>
                   </View>
                   <View style={styles.featureRow}>
-                    <Text style={styles.featureLabel}>Time in Z3 (Threshold)</Text>
+                    <View style={styles.featureLabelCol}>
+                      <Text style={styles.featureLabel}>Z3 — Umbral / Tempo</Text>
+                      <Text style={styles.featureHint}>90-105% FTP: sweet spot y umbral</Text>
+                    </View>
                     <Text style={styles.featureValue}>
                       {Math.round(classification.features.timeInZ3)}min
                     </Text>
                   </View>
                   <View style={styles.featureRow}>
-                    <Text style={styles.featureLabel}>Average Power</Text>
+                    <View style={styles.featureLabelCol}>
+                      <Text style={styles.featureLabel}>Potencia Media</Text>
+                      <Text style={styles.featureHint}>Vatios promedio durante la sesión</Text>
+                    </View>
                     <Text style={styles.featureValue}>
                       {classification.features.avgPower.toFixed(0)}W
                     </Text>
                   </View>
                   <View style={styles.featureRow}>
-                    <Text style={styles.featureLabel}>Normalized Power</Text>
+                    <View style={styles.featureLabelCol}>
+                      <Text style={styles.featureLabel}>Potencia Normalizada (NP)</Text>
+                      <Text style={styles.featureHint}>Esfuerzo real equivalente a ritmo constante</Text>
+                    </View>
                     <Text style={styles.featureValue}>
                       {classification.features.normPower.toFixed(0)}W
                     </Text>
@@ -320,22 +341,22 @@ export default function SessionClassifierScreen({
                 </View>
 
                 <View style={styles.interpretationBox}>
-                  <Text style={styles.interpretationTitle}>What This Means:</Text>
+                  <Text style={styles.interpretationTitle}>Qué significa esta sesión:</Text>
                   <Text style={styles.interpretationText}>
                     {classification.interpretation}
                   </Text>
                 </View>
 
                 <View style={styles.benefitBox}>
-                  <Text style={styles.benefitTitle}>🏆 Training Benefit:</Text>
+                  <Text style={styles.benefitTitle}>🏆 Beneficio del entrenamiento:</Text>
                   <Text style={styles.benefitText}>{classification.trainingBenefit}</Text>
                 </View>
 
                 {classification.recommendations.length > 0 && (
                   <View style={styles.recommendationsBox}>
-                    <Text style={styles.recommendationsTitle}>💡 Recommendations:</Text>
+                    <Text style={styles.recommendationsTitle}>💡 Recomendaciones:</Text>
                     {classification.recommendations.map((rec, idx) => (
-                      <Text style={styles.recommendationItem}>
+                      <Text key={`rec-${idx}`} style={styles.recommendationItem}>
                         • {rec}
                       </Text>
                     ))}
@@ -349,7 +370,8 @@ export default function SessionClassifierScreen({
         {activeTab === 'distribution' && distribution && (
           <View>
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>📊 Training Type Distribution</Text>
+              <Text style={styles.cardTitle}>📊 Distribución del Entrenamiento</Text>
+              <Text style={styles.cardSubtitle}>Global · últimas ~30 sesiones con datos de potencia</Text>
               <View style={styles.cardContent}>
                 <View style={styles.distributionChart}>
                   {[
@@ -628,18 +650,37 @@ const styles = StyleSheet.create({
   featureRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  featureLabelCol: {
+    flex: 1,
+    paddingRight: 8,
+  },
   featureLabel: {
     fontSize: 12,
     color: colors.text,
+    fontWeight: '500',
+  },
+  featureHint: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 14,
   },
   featureValue: {
     fontSize: 12,
     fontWeight: 'bold',
     color: colors.primary,
+  },
+  cardSubtitle: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+    fontStyle: 'italic',
   },
   interpretationBox: {
     backgroundColor: colors.background,

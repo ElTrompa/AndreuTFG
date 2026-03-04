@@ -112,7 +112,7 @@ export default function MetricasAvanzadasScreen({
       if (res.ok) {
         setMetrics(await res.json());
       } else {
-        setError('Could not load metrics for this activity');
+        setError('No se pudieron cargar las métricas de esta actividad');
       }
     } catch (err: any) {
       setError(err.message);
@@ -175,14 +175,14 @@ export default function MetricasAvanzadasScreen({
               key={act.id}
               style={[
                 styles.activityBtn,
-                selectedActivity === act.id && styles.activityBtnActive,
+                selectedActivity === String(act.id) && styles.activityBtnActive,
               ]}
-              onPress={() => handleActivitySelect(act.id)}
+              onPress={() => handleActivitySelect(String(act.id))}
             >
               <Text
                 style={[
                   styles.activityBtnText,
-                  selectedActivity === act.id && styles.activityBtnTextActive,
+                  selectedActivity === String(act.id) && styles.activityBtnTextActive,
                 ]}
                 numberOfLines={1}
               >
@@ -218,7 +218,7 @@ export default function MetricasAvanzadasScreen({
           <Text
             style={[styles.tabText, activeTab === 'peaks' && styles.activeTabText]}
           >
-            Peaks
+            Picos
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -246,7 +246,7 @@ export default function MetricasAvanzadasScreen({
             {activeTab === 'vi' && (
               <View>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>⚡ Variability Index (VI)</Text>
+                  <Text style={styles.cardTitle}>⚡ Índice de Variabilidad (VI)</Text>
                   <View style={styles.cardContent}>
                     <View style={styles.viMainMetric}>
                       <Text style={styles.viValue}>{metrics.variabilityIndex.value.toFixed(2)}</Text>
@@ -254,22 +254,22 @@ export default function MetricasAvanzadasScreen({
                     </View>
                     <Text style={[
                       styles.viRating,
-                      metrics.variabilityIndex.rating === 'High' ? { color: '#e74c3c' } :
-                      metrics.variabilityIndex.rating === 'Moderate' ? { color: '#f39c12' } :
+                      (metrics.variabilityIndex.rating === 'High' || metrics.variabilityIndex.rating === 'Alta') ? { color: '#e74c3c' } :
+                      (metrics.variabilityIndex.rating === 'Moderate' || metrics.variabilityIndex.rating === 'Moderada') ? { color: '#f39c12' } :
                       { color: '#2ecc71' }
                     ]}>
-                      {metrics.variabilityIndex.rating} Variability
+                      Variabilidad {metrics.variabilityIndex.rating === 'High' ? 'Alta' : metrics.variabilityIndex.rating === 'Moderate' ? 'Moderada' : metrics.variabilityIndex.rating === 'Low' ? 'Baja' : metrics.variabilityIndex.rating}
                     </Text>
 
                     <View style={styles.viDetails}>
                       <View style={styles.viDetail}>
-                        <Text style={styles.viDetailLabel}>Normalized Power</Text>
+                        <Text style={styles.viDetailLabel}>Potencia Normalizada</Text>
                         <Text style={styles.viDetailValue}>
                           {metrics.variabilityIndex.np.toFixed(0)}W
                         </Text>
                       </View>
                       <View style={styles.viDetail}>
-                        <Text style={styles.viDetailLabel}>Average Power</Text>
+                        <Text style={styles.viDetailLabel}>Potencia Media</Text>
                         <Text style={styles.viDetailValue}>
                           {metrics.variabilityIndex.avgPower.toFixed(0)}W
                         </Text>
@@ -278,10 +278,10 @@ export default function MetricasAvanzadasScreen({
 
                     <View style={styles.interpretation}>
                       <Text style={styles.interpretationText}>
-                        VI = Normalized Power ÷ Average Power{'\n\n'}
-                        • VI &lt; 1.05: Even pacing (🟢 Good){'\n'}
-                        • VI 1.05 - 1.15: Normal variability{'\n'}
-                        • VI &gt; 1.15: Irregular effort (🔴 Optimize)
+                        VI = Potencia Normalizada ÷ Potencia Media{'\n\n'}
+                        • VI &lt; 1.05: Ritmo uniforme (🟢 Bueno){'\n'}
+                        • VI 1.05 - 1.15: Variabilidad normal{'\n'}
+                        • VI &gt; 1.15: Esfuerzo irregular (🔴 Optimizar)
                       </Text>
                     </View>
                   </View>
@@ -292,7 +292,7 @@ export default function MetricasAvanzadasScreen({
             {activeTab === 'pacing' && (
               <View>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>🏃 Pacing Strategy</Text>
+                  <Text style={styles.cardTitle}>🏃 Estrategia de Ritmo</Text>
                   <View style={styles.cardContent}>
                     <View style={styles.pacingHeader}>
                       <Text style={styles.pacingStrategy}>{metrics.pacingAnalysis.strategy}</Text>
@@ -309,7 +309,7 @@ export default function MetricasAvanzadasScreen({
 
                     <View style={styles.pacingComparison}>
                       <View style={styles.pacingPart}>
-                        <Text style={styles.pacingPartLabel}>First Third</Text>
+                        <Text style={styles.pacingPartLabel}>Primer Tercio</Text>
                         <Text style={styles.pacingPartValue}>
                           {metrics.pacingAnalysis.firstThirdPower.toFixed(0)}W
                         </Text>
@@ -318,7 +318,7 @@ export default function MetricasAvanzadasScreen({
                         <Text style={styles.arrow}>→</Text>
                       </View>
                       <View style={styles.pacingPart}>
-                        <Text style={styles.pacingPartLabel}>Last Third</Text>
+                        <Text style={styles.pacingPartLabel}>Último Tercio</Text>
                         <Text style={styles.pacingPartValue}>
                           {metrics.pacingAnalysis.lastThirdPower.toFixed(0)}W
                         </Text>
@@ -336,10 +336,10 @@ export default function MetricasAvanzadasScreen({
             {activeTab === 'peaks' && (
               <View>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>🏆 Peak Power Records</Text>
+                  <Text style={styles.cardTitle}>🏆 Récords de Potencia Pico</Text>
                   <View style={styles.cardContent}>
                     {metrics.peakPowerRecords.slice(0, 13).map((record, idx) => (
-                      <View style={styles.peakRecord}>
+                      <View style={styles.peakRecord} key={idx}>
                         <View style={styles.peakDuration}>
                           <Text style={styles.peakDurationText}>{record.duration}</Text>
                         </View>
@@ -352,7 +352,7 @@ export default function MetricasAvanzadasScreen({
                           />
                         </View>
                         <Text style={styles.peakPower}>{record.power.toFixed(0)}W</Text>
-                        {record.isRecord && <Text style={styles.recordBadge}>🏅 Record</Text>}
+                        {record.isRecord && <Text style={styles.recordBadge}>🏅 Récord</Text>}
                       </View>
                     ))}
                   </View>
@@ -363,17 +363,17 @@ export default function MetricasAvanzadasScreen({
             {activeTab === 'efficiency' && (
               <View>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>📈 Efficiency Trend</Text>
+                  <Text style={styles.cardTitle}>📈 Tendencia de Eficiencia</Text>
                   <View style={styles.cardContent}>
                     <View style={styles.efficiencyMetrics}>
                       <View style={styles.efficiencyMetric}>
-                        <Text style={styles.efficiencyLabel}>Current EF</Text>
+                        <Text style={styles.efficiencyLabel}>EF Actual</Text>
                         <Text style={styles.efficiencyValue}>
                           {metrics.efficiencyTrend.efficiency.toFixed(2)}
                         </Text>
                       </View>
                       <View style={styles.efficiencyMetric}>
-                        <Text style={styles.efficiencyLabel}>Aerobic Decoup.</Text>
+                        <Text style={styles.efficiencyLabel}>Desacople Aeróbico</Text>
                         <Text
                           style={[
                             styles.efficiencyValue,
@@ -389,10 +389,10 @@ export default function MetricasAvanzadasScreen({
 
                     {trendData && (
                       <View style={styles.trendHistory}>
-                        <Text style={styles.trendTitle}>Weekly Average:</Text>
+                        <Text style={styles.trendTitle}>Promedio Semanal:</Text>
                         {trendData.weeklyData.slice(-4).map((week, idx) => (
-                          <View style={styles.trendRow}>
-                            <Text style={styles.trendWeek}>Week {week.week}</Text>
+                          <View style={styles.trendRow} key={idx}>
+                            <Text style={styles.trendWeek}>Semana {week.week}</Text>
                             <View style={styles.trendBars}>
                               <View style={styles.trendBar}>
                                 <Text style={styles.trendValue}>
@@ -412,7 +412,7 @@ export default function MetricasAvanzadasScreen({
 
                     <View style={[styles.advice, { marginTop: 12 }]}>
                       <Text style={styles.adviceText}>
-                        📊 Trend: {metrics.efficiencyTrend.trend}
+                        📊 Tendencia: {metrics.efficiencyTrend.trend}
                       </Text>
                     </View>
                   </View>

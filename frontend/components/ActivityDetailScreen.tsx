@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import { SvgXml } from 'react-native-svg';
+import MapView, { Polyline, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -46,6 +47,7 @@ export default function ActivityDetailScreen({ activityId, jwt, profile, apiBase
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     if (!jwt || !activityId) return;
@@ -165,8 +167,8 @@ export default function ActivityDetailScreen({ activityId, jwt, profile, apiBase
     let intensity = 0;
     
     // Priorizar potencia normalizada si hay FTP
-    if (analytics?.normalized_power && profile.ftp) {
-      intensity = (analytics.normalized_power / profile.ftp) * 100;
+    if (analytics?.basic?.normalized_power && profile.ftp) {
+      intensity = (analytics.basic.normalized_power / profile.ftp) * 100;
     } 
     // Si no, usar FC promedio con FC max
     else if (activity.average_heartrate && profile.hr_max) {
@@ -275,38 +277,49 @@ export default function ActivityDetailScreen({ activityId, jwt, profile, apiBase
       return <Text style={styles.noData}>No hay datos de mapa disponibles</Text>;
     }
 
-    // Calcular bounding box
+    const coordinates = latlngData.map(([lat, lng]) => ({ latitude: lat, longitude: lng }));
+
+    // Centro e initial region de fallback
     const lats = latlngData.map(p => p[0]);
     const lngs = latlngData.map(p => p[1]);
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs);
-    const maxLng = Math.max(...lngs);
-    const latRange = maxLat - minLat || 0.01;
-    const lngRange = maxLng - minLng || 0.01;
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+    const latDelta = (maxLat - minLat) * 1.4 || 0.01;
+    const lngDelta = (maxLng - minLng) * 1.4 || 0.01;
 
-    const svgWidth = screenWidth - 32;
-    const svgHeight = 250;
-    const padding = 20;
-
-    // Proyectar lat/lng a SVG
-    const project = (lat: number, lng: number): [number, number] => {
-      const x = padding + ((lng - minLng) / lngRange) * (svgWidth - 2 * padding);
-      const y = svgHeight - padding - ((lat - minLat) / latRange) * (svgHeight - 2 * padding);
-      return [x, y];
-    };
-
-    const pathPoints = latlngData.map(p => project(p[0], p[1]));
-    const pathD = pathPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ');
-
-    const svg = `<svg width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${svgWidth}" height="${svgHeight}" fill="#e5e7eb"/>
-      <path d="${pathD}" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="${pathPoints[0][0]}" cy="${pathPoints[0][1]}" r="5" fill="#10b981"/>
-      <circle cx="${pathPoints[pathPoints.length - 1][0]}" cy="${pathPoints[pathPoints.length - 1][1]}" r="5" fill="#ef4444"/>
-    </svg>`;
-
-    return <SvgXml xml={svg} width={svgWidth} height={svgHeight} />;
+    return (
+      <View style={{ height: 250, borderRadius: 8, overflow: 'hidden' }}>
+        <MapView
+          ref={mapRef}
+          style={StyleSheet.absoluteFillObject}
+          mapType="satellite"
+          initialRegion={{
+            latitude: centerLat,
+            longitude: centerLng,
+            latitudeDelta: latDelta,
+            longitudeDelta: lngDelta,
+          }}
+          onMapReady={() => {
+            mapRef.current?.fitToCoordinates(coordinates, {
+              edgePadding: { top: 20, right: 20, bottom: 20, left: 20 },
+              animated: false,
+            });
+          }}
+          scrollEnabled={true}
+          zoomEnabled={true}
+        >
+          <Polyline
+            coordinates={coordinates}
+            strokeColor="#3b82f6"
+            strokeWidth={3}
+          />
+          <Marker coordinate={coordinates[0]} pinColor="green" title="Inicio" />
+          <Marker coordinate={coordinates[coordinates.length - 1]} pinColor="red" title="Fin" />
+        </MapView>
+      </View>
+    );
   };
 
   const renderChart = (data: number[], label: string, color: string, unit: string) => {
@@ -466,15 +479,15 @@ export default function ActivityDetailScreen({ activityId, jwt, profile, apiBase
           <Text style={styles.cardTitle}>📊 Análisis</Text>
           <View style={styles.analyticsRow}>
             <Text style={styles.analyticsLabel}>TSS:</Text>
-            <Text style={styles.analyticsValue}>{Math.round(analytics.tss || 0)}</Text>
+            <Text style={styles.analyticsValue}>{Math.round(analytics.load?.tss || 0)}</Text>
           </View>
           <View style={styles.analyticsRow}>
             <Text style={styles.analyticsLabel}>IF:</Text>
-            <Text style={styles.analyticsValue}>{(analytics.intensity_factor || 0).toFixed(2)}</Text>
+            <Text style={styles.analyticsValue}>{(analytics.substrate?.intensity_factor || 0).toFixed(2)}</Text>
           </View>
           <View style={styles.analyticsRow}>
             <Text style={styles.analyticsLabel}>NP:</Text>
-            <Text style={styles.analyticsValue}>{Math.round(analytics.normalized_power || 0)} W</Text>
+            <Text style={styles.analyticsValue}>{Math.round(analytics.basic?.normalized_power || 0)} W</Text>
           </View>
         </View>
       )}

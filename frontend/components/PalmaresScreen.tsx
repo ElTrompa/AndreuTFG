@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, AsyncStorage } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Achievement = {
   segment_id: number;
@@ -179,7 +180,7 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
             <Text style={styles.statLabel}>Distancia:</Text>
             <Text style={styles.statValue}>{formatDistance(achievement.distance)}</Text>
           </View>
-          {achievement.effort_count && achievement.effort_count > 0 && (
+          {(achievement.effort_count ?? 0) > 0 && (
             <View style={styles.statRow}>
               <Text style={styles.statLabel}>Intentos:</Text>
               <Text style={styles.statValue}>{achievement.effort_count}</Text>
@@ -251,9 +252,11 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
 
     return (
       <ScrollView style={styles.scrollContent}>
-        {data.map((achievement, index) => 
-          renderAchievementCard(achievement, activeTab !== 'koms', index)
-        )}
+        {data.map((achievement, index) => (
+          <View key={`achievement-${achievement.segment_id}-${index}`}>
+            {renderAchievementCard(achievement, activeTab !== 'koms', index)}
+          </View>
+        ))}
       </ScrollView>
     );
   };
@@ -336,6 +339,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#fff',
     padding: 16,
+    paddingTop: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },

@@ -34,23 +34,14 @@ interface TrainingReadiness {
   emoji: string;
 }
 
-interface HRVAnomaly {
-  date: string;
-  hrv: number;
-  baseline: number;
-  drop: number;
-  significance: string;
-}
-
 export default function HRVScreen({
   jwt,
   apiBase = 'http://localhost:3001',
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'status' | 'readiness' | 'anomalies'>('status');
+  const [activeTab, setActiveTab] = useState<'status' | 'readiness'>('status');
   const [loading, setLoading] = useState(true);
   const [hrvStatus, setHrvStatus] = useState<HRVStatus | null>(null);
   const [readiness, setReadiness] = useState<TrainingReadiness | null>(null);
-  const [anomalies, setAnomalies] = useState<HRVAnomaly[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [manualHrv, setManualHrv] = useState('');
   const [showInput, setShowInput] = useState(false);
@@ -130,26 +121,6 @@ export default function HRVScreen({
     };
   };
 
-  const normalizeAnomalies = (payload: any, baselineValue?: number): HRVAnomaly[] => {
-    const list = Array.isArray(payload?.anomalies) ? payload.anomalies : [];
-    const baseline = safeNumber(baselineValue, 0);
-    return list.map((anom: any) => {
-      const deviation = safeNumber(anom.deviation, 0);
-      const severity = String(anom.severity || '').toLowerCase();
-      const significance =
-        severity === 'high' ? 'Critical' :
-        severity === 'medium' ? 'Major' :
-        'Minor';
-      return {
-        date: anom.date,
-        hrv: safeNumber(anom.rmssd ?? anom.hrv, 0),
-        baseline,
-        drop: Math.abs(deviation),
-        significance,
-      };
-    });
-  };
-
   useEffect(() => {
     fetchHRVData();
   }, []);
@@ -162,7 +133,7 @@ export default function HRVScreen({
       // Default HRV for demo (normally from user input or device)
       const defaultHRV = 52;
 
-      const [statusRes, readinessRes, anomaliesRes] = await Promise.all([
+      const [statusRes, readinessRes] = await Promise.all([
         fetch(`${apiBase}/specialized/hrv/status`, {
           method: 'POST',
           headers: {
@@ -179,26 +150,13 @@ export default function HRVScreen({
           },
           body: JSON.stringify({ hrv: defaultHRV }),
         }),
-        fetch(`${apiBase}/specialized/hrv/anomalies`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${jwt}`,
-          },
-          body: JSON.stringify({ hrv: defaultHRV }),
-        }),
       ]);
 
       const statusPayload = statusRes.ok ? await statusRes.json() : null;
       const readinessPayload = readinessRes.ok ? await readinessRes.json() : null;
-      const anomaliesPayload = anomaliesRes.ok ? await anomaliesRes.json() : null;
 
       if (statusPayload) setHrvStatus(normalizeStatus(statusPayload));
       if (readinessPayload) setReadiness(normalizeReadiness(readinessPayload));
-      if (anomaliesPayload) {
-        const baselineValue = statusPayload?.status?.baseline ?? statusPayload?.average?.average;
-        setAnomalies(normalizeAnomalies(anomaliesPayload, baselineValue));
-      }
 
       if (!statusRes.ok) {
         setError('Error al cargar datos HRV');
@@ -326,16 +284,6 @@ export default function HRVScreen({
             style={[styles.tabText, activeTab === 'readiness' && styles.activeTabText]}
           >
             Disposición
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'anomalies' && styles.activeTab]}
-          onPress={() => setActiveTab('anomalies')}
-        >
-          <Text
-            style={[styles.tabText, activeTab === 'anomalies' && styles.activeTabText]}
-          >
-            Anomalías
           </Text>
         </TouchableOpacity>
       </View>
@@ -468,91 +416,23 @@ export default function HRVScreen({
 
                 <View style={styles.readinessScale}>
                   <Text style={styles.scaleTitle}>Escala de Disposición:</Text>
-                  <View style={styles.scaleItem}>
-                    <View style={[styles.scaleDot, { backgroundColor: '#2ecc71' }]} />
-                    <Text style={styles.scaleLabel}>Óptimo (90-100%): ¡Entrena fuerte!</Text>
-                  </View>
-                  <View style={styles.scaleItem}>
-                    <View style={[styles.scaleDot, { backgroundColor: '#3498db' }]} />
-                    <Text style={styles.scaleLabel}>Bueno (70-89%): Entrenamiento normal</Text>
-                  </View>
-                  <View style={styles.scaleItem}>
-                    <View style={[styles.scaleDot, { backgroundColor: '#f39c12' }]} />
-                    <Text style={styles.scaleLabel}>Regular (50-69%): Ritmo fácil</Text>
-                  </View>
-                  <View style={styles.scaleItem}>
-                    <View style={[styles.scaleDot, { backgroundColor: '#e74c3c' }]} />
-                    <Text style={styles.scaleLabel}>Bajo (&lt;50%): Descanso/Recuperación</Text>
-                  </View>
+                  {[
+                    { color: '#2ecc71', label: 'Óptimo (90-100%): ¡Entrena fuerte!' },
+                    { color: '#3498db', label: 'Bueno (70-89%): Entrenamiento normal' },
+                    { color: '#f39c12', label: 'Regular (50-69%): Ritmo fácil' },
+                    { color: '#e74c3c', label: 'Bajo (<50%): Descanso/Recuperación' }
+                  ].map((item, idx) => (
+                    <View key={`scale-${idx}`} style={styles.scaleItem}>
+                      <View style={[styles.scaleDot, { backgroundColor: item.color }]} />
+                      <Text style={styles.scaleLabel}>{item.label}</Text>
+                    </View>
+                  ))}
                 </View>
               </View>
             </View>
           </View>
         )}
 
-        {activeTab === 'anomalies' && (
-          <View>
-            {anomalies.length > 0 ? (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>⚠️ Anomalías HRV</Text>
-                <View style={styles.cardContent}>
-                  <Text style={styles.anomalyInfo}>
-                    {anomalies.length} caída(s) significativa(s) detectada(s) en datos recientes
-                  </Text>
-                  {anomalies.map((anom, idx) => (
-                    <View key={idx} style={styles.anomalyItem}>
-                      <View style={styles.anomalyHeader}>
-                        <Text style={styles.anomalyDate}>{anom.date}</Text>
-                        <Text style={[
-                          styles.anomalySeverity,
-                          anom.significance === 'Critical' ? { color: '#e74c3c' } :
-                          anom.significance === 'Major' ? { color: '#f39c12' } :
-                          { color: '#3498db' }
-                        ]}>
-                          {anom.significance}
-                        </Text>
-                      </View>
-                      <View style={styles.anomalyDetails}>
-                        <View style={styles.anomalyDetail}>
-                          <Text style={styles.anomalyDetailLabel}>Medido</Text>
-                          <Text style={styles.anomalyDetailValue}>{anom.hrv} ms</Text>
-                        </View>
-                        <View style={styles.anomalyDetail}>
-                          <Text style={styles.anomalyDetailLabel}>Línea Base</Text>
-                          <Text style={styles.anomalyDetailValue}>{anom.baseline} ms</Text>
-                        </View>
-                        <View style={styles.anomalyDetail}>
-                          <Text style={styles.anomalyDetailLabel}>Drop</Text>
-                          <Text style={[styles.anomalyDetailValue, { color: '#e74c3c' }]}>
-                            -{anom.drop.toFixed(1)}%
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                  <View style={styles.anomalyAdvice}>
-                    <Text style={styles.anomalyAdviceTitle}>💡 Recomendaciones:</Text>
-                    <Text style={styles.anomalyAdviceText}>
-                      • Verifica estrés, enfermedad o mal sueño{'\n'}
-                      • Considera reducir la intensidad del entrenamiento{'\n'}
-                      • Permite tiempo extra de recuperación{'\n'}
-                      • Monitorea el HRV de cerca en los próximos días
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.card}>
-                <View style={styles.cardContent}>
-                  <Text style={styles.noAnomalyText}>
-                    ✓ ¡No se detectaron anomalías significativas!{'\n'}
-                    Tu HRV es estable y normal.
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
-        )}
       </ScrollView>
     </View>
   );

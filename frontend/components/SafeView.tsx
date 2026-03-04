@@ -5,6 +5,8 @@
 import React from 'react';
 import { View as RNView, Platform, ViewProps } from 'react-native';
 
+type SafeViewProps = React.ComponentPropsWithoutRef<typeof RNView>;
+
 const RESPONDER_PROPS = new Set([
   'onStartShouldSetResponder',
   'onResponderTerminationRequest',
@@ -20,14 +22,14 @@ const RESPONDER_PROPS = new Set([
  * Filters out mobile-specific responder props before passing to React Native
  * On web, these props are not supported and cause warnings
  */
-function filterResponderProps(props: any): ViewProps {
+function filterResponderProps(props: SafeViewProps): SafeViewProps {
   if (Platform.OS !== 'web') {
     return props;
   }
 
-  const filtered: any = { ...props };
+  const filtered: SafeViewProps = { ...props };
   RESPONDER_PROPS.forEach(prop => {
-    delete filtered[prop];
+    delete (filtered as any)[prop];
   });
   return filtered;
 }
@@ -35,10 +37,8 @@ function filterResponderProps(props: any): ViewProps {
 /**
  * Drop-in replacement for View that removes responder handlers on web
  */
-export const SafeView = React.forwardRef<any, ViewProps>((props, ref) => {
-  return <RNView {...filterResponderProps(props)} ref={ref} />;
-});
-
-SafeView.displayName = 'SafeView';
+export const SafeView = (props: SafeViewProps) => {
+  return <RNView {...filterResponderProps(props)} />;
+};
 
 export default SafeView;

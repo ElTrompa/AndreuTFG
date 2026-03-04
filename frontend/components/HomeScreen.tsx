@@ -224,34 +224,57 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
     );
   };
 
+  const getPeriodDays = () => {
+    if (view === 'weekly') return 7;
+    if (view === 'monthly') return 30;
+    return 365;
+  };
+
+  const getPeriodDailyData = () => {
+    const daily = Array.isArray(pmcData?.daily) ? pmcData.daily : [];
+    const days = getPeriodDays();
+    return daily.slice(-days);
+  };
+
   // Determinar el resumen según la vista seleccionada
   const getSummary = () => {
     if (!pmcData) return null;
-    if (view === 'weekly') {
-      return pmcData.summary_week;
-    }
-    return pmcData.summary_month;
+
+    const periodData = getPeriodDailyData();
+    if (periodData.length === 0) return null;
+
+    const periodDays = getPeriodDays();
+    const totalTss = periodData.reduce((sum: number, day: any) => sum + (day.tss || 0), 0);
+    const workoutDays = periodData.filter((day: any) => (day.tss || 0) > 0).length;
+    const last = periodData[periodData.length - 1] || {};
+    const tsb = last.tsb || 0;
+
+    let recommendation = 'Mantén tu plan actual';
+    if (tsb < -25) recommendation = 'Fatiga alta: reduce carga y prioriza recuperación';
+    else if (tsb < -10) recommendation = 'Carga elevada: incluye días suaves';
+    else if (tsb > 15) recommendation = 'Estás fresco: buen momento para trabajo de calidad';
+
+    return {
+      weekly_tss: totalTss.toFixed(1),
+      monthly_tss: totalTss.toFixed(1),
+      avg_tss_per_day: (totalTss / periodDays).toFixed(1),
+      workout_days: workoutDays,
+      status: {
+        recommendation,
+      },
+    };
   };
 
   const getCurrentMetrics = () => {
     if (!pmcData) return { ctl: 0, atl: 0, tsb: 0, date: '', formLevel: '', fatigueLevel: '', freshnessLevel: '' };
-    
-    let data: any[] = [];
-    
-    if (view === 'weekly') {
-      data = (pmcData.weekly || []).slice(-12);
-    } else if (view === 'monthly') {
-      data = (pmcData.monthly || []).slice(-12);
-    } else if (view === 'yearly') {
-      data = (pmcData.monthly || []).slice(-24);
-    }
-    
-    if (data.length === 0) return { ctl: 0, atl: 0, tsb: 0, date: '', formLevel: '', fatigueLevel: '', freshnessLevel: '' };
-    
-    const lastPoint = data[data.length - 1];
-    const ctl = lastPoint.ctl || lastPoint.ctl_end || 0;
-    const atl = lastPoint.atl || lastPoint.atl_end || 0;
-    const tsb = lastPoint.tsb || lastPoint.tsb_end || 0;
+
+    const periodData = getPeriodDailyData();
+    if (periodData.length === 0) return { ctl: 0, atl: 0, tsb: 0, date: '', formLevel: '', fatigueLevel: '', freshnessLevel: '' };
+
+    const ctl = periodData.reduce((sum: number, day: any) => sum + (day.ctl || 0), 0) / periodData.length;
+    const atl = periodData.reduce((sum: number, day: any) => sum + (day.atl || 0), 0) / periodData.length;
+    const tsb = periodData.reduce((sum: number, day: any) => sum + (day.tsb || 0), 0) / periodData.length;
+    const lastPoint = periodData[periodData.length - 1] || {};
     
     // Calcular niveles dinámicamente
     const formLevel = ctl < 30 ? 'Bajo' : ctl < 50 ? 'En Desarrollo' : ctl < 80 ? 'Bueno' : 'Excelente';

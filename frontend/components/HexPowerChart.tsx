@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text } from 'react-native';
 import Svg, { Polygon, Circle, Line, G, Text as SvgText, Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 
@@ -132,7 +132,7 @@ export default function HexPowerChart({ values, size=320, weightKg }: Props){
           {/* circular radial lines */}
           {points.map((pt, i)=>{
             const p = polarToCartesian(cx, cy, radius, pt.angle);
-            return <Line key={'rad'+i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#e6eef2" strokeWidth={0.6} />;
+            return <Line key={`line-${i}`} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#e6eef2" strokeWidth={0.6} />;
           })}
 
           {/* concentric rings */}
@@ -142,7 +142,7 @@ export default function HexPowerChart({ values, size=320, weightKg }: Props){
               const p = polarToCartesian(cx, cy, radius * rFrac, ang);
               return `${p.x},${p.y}`;
             }).join(' ');
-            return <Polygon key={'ring'+ri} points={pts} fill="none" stroke="#dbeef3" strokeWidth={0.8} strokeDasharray={[3,4]} />;
+            return <Polygon key={`ring-${ri}`} points={pts} fill="none" stroke="#dbeef3" strokeWidth={0.8} strokeDasharray={[3,4]} />;
           })}
 
           {/* data fill + outline */}

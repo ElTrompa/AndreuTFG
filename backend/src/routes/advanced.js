@@ -16,9 +16,7 @@ const {
 } = require('../services/coaching');
 const {
   calculateVariabilityIndex,
-  interpretVI,
   analyzePacing,
-  detectPowerRecords,
   analyzeEfficiencyTrend,
   analyzeDecouplingTrend
 } = require('../services/advancedMetrics');
@@ -360,47 +358,148 @@ router.get('/activity/:id/advanced-metrics', async (req, res) => {
     // Variability Index
     if (activity.weighted_average_watts && activity.average_watts) {
       const vi = calculateVariabilityIndex(activity.weighted_average_watts, activity.average_watts);
-      const viInfo = interpretVI(vi);
+      let rating = 'Low';
+      if (vi >= 1.15) rating = 'High';
+      else if (vi >= 1.05) rating = 'Moderate';
       result.variabilityIndex = {
         value: vi,
         np: activity.weighted_average_watts,
         avgPower: activity.average_watts,
-        rating: viInfo.rating || 'unknown'
+        rating
       };
     }
 
-    // Pacing Score (requiere stream)
+    // Obtener streams una vez (potencia + FC)
+    let wattsData = [];
+    let hrData = [];
     try {
-      const streams = await strava.getActivityStreams(athlete_id, req.params.id, ['watts']).catch(() => null);
-      if (streams && streams.watts && streams.watts.data && streams.watts.data.length > 0) {
-        const pacingInfo = analyzePacing(streams.watts.data, activity.moving_time);
+      const streams = await strava
+        .getActivityStreams(athlete_id, req.params.id, ['watts', 'heartrate'])
+        .catch(() => null);
+
+      if (streams && streams.watts && Array.isArray(streams.watts.data)) {
+        wattsData = streams.watts.data.filter(v => Number.isFinite(v) && v > 0);
+      }
+      if (streams && streams.heartrate && Array.isArray(streams.heartrate.data)) {
+        hrData = streams.heartrate.data.filter(v => Number.isFinite(v) && v > 0);
+      }
+
+      // Pacing Score (requiere potencia)
+      if (wattsData.length > 0) {
+        const pacingInfo = analyzePacing(wattsData, activity.moving_time);
+        const firstThirdPower = pacingInfo?.details?.firstThird || 0;
+        const lastThirdPower = pacingInfo?.details?.lastThird || 0;
+        const improvement =
+          firstThirdPower > 0
+            ? ((lastThirdPower - firstThirdPower) / firstThirdPower) * 100
+            : 0;
+
         result.pacingAnalysis = {
           strategy: pacingInfo.strategy || 'Desconocida',
-          firstThirdPower: pacingInfo.firstThirdPower || 0,
-          lastThirdPower: pacingInfo.lastThirdPower || 0,
-          improvement: pacingInfo.improvement || 0,
-          advice: pacingInfo.advice || 'Sin recomendaciones'
+          firstThirdPower,
+          lastThirdPower,
+          improvement: Math.round(improvement * 10) / 10,
+          advice: pacingInfo.description || 'Sin recomendaciones'
         };
       }
     } catch (e) {
       console.log('[Advanced Metrics] No pacing data:', e.message);
     }
 
-    // Check for power records
+    // Peak power por duración (con marca de récord cuando aplica)
     try {
       const powerCurve = await getPowerCurve(athlete_id);
-      if (powerCurve && powerCurve.data) {
-        const records = detectPowerRecords(activity, powerCurve.data);
-        if (records && records.length > 0) {
-          result.peakPowerRecords = records.map(r => ({
-            duration: r.duration || 'unknown',
-            power: r.power || 0,
-            isRecord: r.isRecord || false
-          }));
-        }
+      if (powerCurve && powerCurve.data && wattsData.length > 0) {
+        const durations = [5, 15, 30, 60, 120, 180, 300, 600, 900, 1200, 1800, 2700, 3600];
+
+        const rollingBest = (arr, windowSize) => {
+          if (!Array.isArray(arr) || arr.length < windowSize) return 0;
+          let windowSum = 0;
+          for (let i = 0; i < windowSize; i++) windowSum += arr[i];
+          let best = windowSum / windowSize;
+          for (let i = windowSize; i < arr.length; i++) {
+            windowSum += arr[i] - arr[i - windowSize];
+            const avg = windowSum / windowSize;
+            if (avg > best) best = avg;
+          }
+          return Math.round(best);
+        };
+
+        const formatDurationLabel = (seconds) => {
+          if (seconds < 60) return `${seconds}s`;
+          if (seconds < 3600) return `${Math.round(seconds / 60)}min`;
+          return `${Math.round(seconds / 3600)}h`;
+        };
+
+        result.peakPowerRecords = durations
+          .map((duration) => {
+            const currentPower = rollingBest(wattsData, duration);
+            const historicalBest = Number(powerCurve.data[String(duration)] || powerCurve.data[duration] || 0);
+            if (!currentPower) return null;
+            return {
+              duration: formatDurationLabel(duration),
+              power: currentPower,
+              isRecord: historicalBest > 0 ? currentPower > historicalBest : false,
+            };
+          })
+          .filter(Boolean);
       }
     } catch (e) {
       console.log('[Advanced Metrics] No power records:', e.message);
+    }
+
+    // Efficiency (EF + aerobic decoupling)
+    try {
+      const avgPower = activity.average_watts || 0;
+      const avgHr = activity.average_heartrate || 0;
+      const currentEf = avgPower > 0 && avgHr > 0 ? avgPower / avgHr : 0;
+
+      let aerobicDecoupling = 0;
+      if (wattsData.length > 20 && hrData.length > 20) {
+        const len = Math.min(wattsData.length, hrData.length);
+        const half = Math.floor(len / 2);
+
+        const firstPower = wattsData.slice(0, half).reduce((a, b) => a + b, 0) / Math.max(1, half);
+        const secondPower = wattsData.slice(half, len).reduce((a, b) => a + b, 0) / Math.max(1, len - half);
+        const firstHr = hrData.slice(0, half).reduce((a, b) => a + b, 0) / Math.max(1, half);
+        const secondHr = hrData.slice(half, len).reduce((a, b) => a + b, 0) / Math.max(1, len - half);
+
+        const efFirst = firstHr > 0 ? firstPower / firstHr : 0;
+        const efSecond = secondHr > 0 ? secondPower / secondHr : 0;
+
+        aerobicDecoupling = efFirst > 0 ? ((efFirst - efSecond) / efFirst) * 100 : 0;
+      }
+
+      const recentActivities = await strava.getActivities(athlete_id, { per_page: 30 }).catch(() => []);
+      const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const lastWeekEF = (recentActivities || [])
+        .filter((a) => (new Date(a.start_date || a.date)).getTime() >= oneWeekAgo)
+        .map((a) => {
+          const p = a.average_watts || 0;
+          const h = a.average_heartrate || 0;
+          return p > 0 && h > 0 ? p / h : 0;
+        })
+        .filter((ef) => ef > 0);
+
+      const previousWeek = lastWeekEF.length
+        ? lastWeekEF.reduce((sum, ef) => sum + ef, 0) / lastWeekEF.length
+        : 0;
+
+      let trend = 'neutral';
+      if (currentEf > 0 && previousWeek > 0) {
+        if (currentEf > previousWeek * 1.03) trend = 'improving';
+        else if (currentEf < previousWeek * 0.97) trend = 'declining';
+        else trend = 'stable';
+      }
+
+      result.efficiencyTrend = {
+        efficiency: Math.round(currentEf * 100) / 100,
+        aerobicDecoupling: Math.round(aerobicDecoupling * 10) / 10,
+        previousWeek: Math.round(previousWeek * 100) / 100,
+        trend
+      };
+    } catch (e) {
+      console.log('[Advanced Metrics] No efficiency data:', e.message);
     }
 
     res.json(result);
@@ -435,6 +534,21 @@ router.get('/efficiency-trends', async (req, res) => {
   }
 });
 
+function buildRecommendations(classification, feat, profile) {
+  const recs = [];
+  const ifVal = feat.intensityFactor || 0;
+  const type = (classification.type || '').toLowerCase();
+  if (type === 'recovery') recs.push('Sesión de recuperación: mantén baja la intensidad y prioriza el descanso.');
+  if (type === 'vo2max' || type === 'anaerobic') recs.push('Sesión de alta intensidad: asegura 48h de recuperación antes del próximo duro.');
+  if (type === 'sweetspot') recs.push('Sweet Spot: muy efectivo para mejorar FTP. No abuses — 2 sesiones/semana máximo.');
+  if (type === 'endurance') recs.push('Fondo: mantén el ritmo conversacional para maximizar adaptaciones aeróbicas.');
+  if (type === 'threshold') recs.push('Umbral: trabaja bloques de 10-20 min a FTP para aumentar tu potencia sostenida.');
+  if (ifVal > 1.0) recs.push(`IF ${ifVal.toFixed(2)} → carga elevada. Considera reducir la intensidad de las próximas sesiones.`);
+  if (ifVal < 0.6 && ifVal > 0) recs.push('Sesión muy suave: válida para recuperación activa.');
+  if (!profile?.ftp) recs.push('Introduce tu FTP en Perfil para obtener métricas más precisas.');
+  return recs;
+}
+
 /**
  * 🤖 CLASSIFY SESSION TYPE
  */
@@ -451,6 +565,14 @@ router.get('/activity/:id/classify', async (req, res) => {
     }
 
     const classification = classifySession(activity, profile);
+    const feat = classification.features || {};
+
+    // Estimate time in zones from IF + duration (no streams available)
+    const durationMin = (activity.moving_time || 0) / 60;
+    const ifVal = feat.intensityFactor || 0;
+    const estimatedZ5 = ifVal > 0.95 ? Math.round(durationMin * 0.20) : ifVal > 0.85 ? Math.round(durationMin * 0.08) : 0;
+    const estimatedZ4 = ifVal > 0.90 ? Math.round(durationMin * 0.25) : ifVal > 0.80 ? Math.round(durationMin * 0.15) : Math.round(durationMin * 0.05);
+    const estimatedZ3 = ifVal > 0.82 ? Math.round(durationMin * 0.40) : Math.round(durationMin * 0.15);
 
     res.json({
       activityId: activity.id,
@@ -458,17 +580,17 @@ router.get('/activity/:id/classify', async (req, res) => {
       sessionType: classification.type || 'Desconocido',
       confidence: classification.confidence || 0,
       features: {
-        IF: classification.intensityFactor || 0,
-        VI: classification.variabilityIndex || 0,
-        timeInZ5: classification.timeInZ5 || 0,
-        timeInZ4: classification.timeInZ4 || 0,
-        timeInZ3: classification.timeInZ3 || 0,
+        IF: feat.intensityFactor || 0,
+        VI: feat.variabilityIndex || 0,
+        timeInZ5: estimatedZ5,
+        timeInZ4: estimatedZ4,
+        timeInZ3: estimatedZ3,
         avgPower: activity.average_watts || 0,
         normPower: activity.weighted_average_watts || 0
       },
-      interpretation: classification.interpretation || 'Sin interpretación',
-      trainingBenefit: classification.benefit || 'Desconocido',
-      recommendations: classification.recommendations || []
+      interpretation: classification.description || 'Sin interpretación',
+      trainingBenefit: (classification.tags || []).join(', ') || 'Desconocido',
+      recommendations: classification.tags ? buildRecommendations(classification, feat, profile) : []
     });
   } catch (err) {
     console.error('[Classify Session] Error:', err);

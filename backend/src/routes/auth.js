@@ -32,8 +32,8 @@ router.get('/strava', (req, res) => {
     client_id: STRAVA_CLIENT_ID,
     response_type: 'code',
     redirect_uri: STRAVA_REDIRECT_URI,
-    approval_prompt: 'auto',
-    scope: 'read,activity:read'
+    approval_prompt: 'force',
+    scope: 'read,activity:read_all,profile:read_all'
   });
   const url = `https://www.strava.com/oauth/authorize?${params.toString()}`;
   res.redirect(url);
@@ -50,8 +50,8 @@ router.get('/start', async (req, res) => {
       client_id: STRAVA_CLIENT_ID,
       response_type: 'code',
       redirect_uri: STRAVA_REDIRECT_URI,
-      approval_prompt: 'auto',
-      scope: 'read,activity:read',
+      approval_prompt: 'force',
+      scope: 'read,activity:read_all,profile:read_all',
       state
     });
     const url = `https://www.strava.com/oauth/authorize?${params.toString()}`;

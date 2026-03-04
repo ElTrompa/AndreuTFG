@@ -15,9 +15,10 @@ import {
   Dimensions,
   ScrollView,
   Alert,
-  Linking
+  Linking,
+  Platform,
+  StatusBar
 } from 'react-native';
-import SafeView from './SafeView';
 
 interface Town {
   id: number;
@@ -274,22 +275,19 @@ export default function RoutesSearchScreen({ jwt, athlete, apiBase = 'http://loc
 
   if (!athleteId) {
     return (
-      <SafeView>
-        <View style={styles.container}>
-          <Text style={styles.errorText}>❌ Error: No se pudo determinar tu ID de atleta. Asegúrate de estar autenticado.</Text>
-          <TouchableOpacity style={styles.button}>
-            <Text style={styles.buttonText}>Volver al inicio</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeView>
+      <View style={styles.container}>
+        <Text style={styles.errorText}>❌ Error: No se pudo determinar tu ID de atleta. Asegúrate de estar autenticado.</Text>
+        <TouchableOpacity style={styles.button}>
+          <Text style={styles.buttonText}>Volver al inicio</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
   // Vista de pueblos
   if (!selectedTown) {
     return (
-      <SafeView>
-        <View style={styles.container}>
+      <View style={styles.container}>
           <View style={styles.header}>
             <Text style={styles.title}>🏘️ Búsqueda por Pueblos</Text>
             <Text style={styles.subtitle}>Explora las rutas por pueblos</Text>
@@ -355,14 +353,12 @@ export default function RoutesSearchScreen({ jwt, athlete, apiBase = 'http://loc
             <Text style={styles.fabText}>⚙️</Text>
           </TouchableOpacity>
         </View>
-      </SafeView>
     );
   }
 
   // Vista de actividades de un pueblo
   return (
-    <SafeView>
-      <View style={styles.container}>
+    <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => setSelectedTown(null)}>
             <Text style={styles.backButton}>← Atrás</Text>
@@ -438,7 +434,6 @@ export default function RoutesSearchScreen({ jwt, athlete, apiBase = 'http://loc
           />
         )}
       </View>
-    </SafeView>
   );
 }
 
@@ -463,7 +458,7 @@ const styles = StyleSheet.create({
   // Header
   header: {
     backgroundColor: '#0EA5E9',
-    paddingTop: 40,
+    paddingTop: 16,
     paddingHorizontal: 20,
     paddingBottom: 24,
     marginBottom: 16

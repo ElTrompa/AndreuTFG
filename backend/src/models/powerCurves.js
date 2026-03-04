@@ -48,23 +48,27 @@ async function listActivitiesPaged(athlete_id, opts = {}) {
 async function computePowerCurve(athlete_id, opts = {}) {
   const after = opts.after || null; // optional epoch seconds
   const perPage = opts.perPage || 200;
-  const maxPages = opts.maxPages || 30;
+  const maxPages = opts.maxPages || 5;  // reducido: 5 páginas = últimas ~1000 actividades
   const batchDelayMs = Number(opts.batchDelayMs) || 0;
+  const maxActivities = Number(opts.maxActivities) || 150; // máximo 150 actividades con streams
   const activities = await listActivitiesPaged(athlete_id, { perPage, maxPages, after });
 
   // best power per duration
   const best = {};
   DURATIONS.forEach(d => best[d.key] = 0);
 
-  // filter activities by device_watts and optional after
-  const candidates = activities.filter(a => a.device_watts).filter(a => {
-    if (!after) return true;
-    const start = a.start_date ? Math.floor(new Date(a.start_date).getTime()/1000) : 0;
-    return start >= after;
-  });
+  // filter activities by device_watts and optional after, limit total
+  const candidates = activities
+    .filter(a => a.device_watts)
+    .filter(a => {
+      if (!after) return true;
+      const start = a.start_date ? Math.floor(new Date(a.start_date).getTime()/1000) : 0;
+      return start >= after;
+    })
+    .slice(0, maxActivities); // limitar para evitar demasiadas peticiones a Strava
 
-  // process in batches with limited concurrency
-  const concurrency = Number(opts.concurrency) || 4;
+  // process in batches with higher concurrency for speed
+  const concurrency = Number(opts.concurrency) || 8;
   for (let i = 0; i < candidates.length; i += concurrency) {
     const batch = candidates.slice(i, i + concurrency);
     const batchPromises = batch.map(async (act) => {
