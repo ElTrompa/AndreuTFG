@@ -3,6 +3,12 @@
  * Pantalla para explorar todas las rutas que pasan por un pueblo específico
  */
 
+/**
+ * Pantalla de búsqueda de rutas por pueblos: lista todos los municipios
+ * por los que ha pasado el ciclista y permite ver qué actividades pasan
+ * por un pueblo concreto.
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -56,7 +62,7 @@ export default function RoutesSearchScreen({ jwt, athlete, apiBase = 'http://loc
   const [townActivities, setTownActivities] = useState<Activity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
   
-  // Extract athlete_id from props or JWT
+  // Obtener el ID del atleta desde props o decodificando el JWT
   const athleteId = athlete?.id ? String(athlete.id) : extractAthleteIdFromJWT(jwt);
 
   useEffect(() => {
@@ -67,6 +73,9 @@ export default function RoutesSearchScreen({ jwt, athlete, apiBase = 'http://loc
     loadTowns();
   }, [athleteId]);
 
+  /**
+   * Extrae el athlete_id del payload del JWT (Base64 decodificado).
+   */
   function extractAthleteIdFromJWT(jwtToken: string | null | undefined): string | null {
     if (!jwtToken) return null;
     try {

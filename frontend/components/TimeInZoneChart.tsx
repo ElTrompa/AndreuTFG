@@ -1,3 +1,7 @@
+/**
+ * Gráfico de tiempo en zonas de potencia:
+ * muestra las horas acumuladas en cada zona (Z1-Z5) según el FTP del atleta.
+ */
 import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Svg, { Rect, G, Text as SvgText } from 'react-native-svg';
@@ -8,17 +12,17 @@ type Props = {
   profile?: any;
 };
 
-// FTP-based zones (standard cycling zones)
-// Z1: <55% FTP (Recovery)
-// Z2: 55-75% FTP (Endurance)
+// Zonas de potencia estándar basadas en el FTP (Functional Threshold Power)
+// Z1: <55% FTP (Recuperación)
+// Z2: 55-75% FTP (Resistencia aeróbica)
 // Z3: 75-90% FTP (Tempo)
-// Z4: 90-105% FTP (Threshold)
-// Z5: >105% FTP (VO2max)
+// Z4: 90-105% FTP (Umbral)
+// Z5: >105% FTP (VO2max / Anaerobico)
 const zoneLabels = ['Z1','Z2','Z3','Z4','Z5'];
 
 function getZoneIndex(avgWatts: number, ftp: number | null): number {
   if (!ftp || ftp <= 0) {
-    // Fallback to arbitrary zones if no FTP
+    // Fallback a zonas arbitrarias si no hay FTP configurado
     const zones = [0, 100, 150, 200, 250, 9999];
     return zones.findIndex((z, i) => avgWatts >= z && avgWatts < zones[i + 1]) || 0;
   }

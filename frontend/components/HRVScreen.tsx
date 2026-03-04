@@ -1,3 +1,8 @@
+/**
+ * Pantalla de HRV (Variabilidad de la Frecuencia Cardíaca):
+ * muestra el estado actual del HRV del atleta y su disposición
+ * para el entrenamiento, con tabs de Estado y Disposición.
+ */
 import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -38,19 +43,25 @@ export default function HRVScreen({
   jwt,
   apiBase = 'http://localhost:3001',
 }: Props) {
+  // Tab activa: 'status' (estado HRV) o 'readiness' (disposición al entrenamiento)
   const [activeTab, setActiveTab] = useState<'status' | 'readiness'>('status');
   const [loading, setLoading] = useState(true);
+  // Estado del HRV (valor actual, línea base, tendencia)
   const [hrvStatus, setHrvStatus] = useState<HRVStatus | null>(null);
+  // Disposición al entrenamiento (puntuación, nivel, consejo)
   const [readiness, setReadiness] = useState<TrainingReadiness | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Campo para introducir HRV manualmente
   const [manualHrv, setManualHrv] = useState('');
   const [showInput, setShowInput] = useState(false);
 
+  // Devuelve número seguro (evita NaN/Infinity)
   const safeNumber = (value: any, fallback = 0) => {
     const n = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(n) ? n : fallback;
   };
 
+  // Color según estado del HRV (excellent, good, normal, low, very_low)
   const statusColorFor = (status: string) => {
     switch (status) {
       case 'excellent':
@@ -68,6 +79,10 @@ export default function HRVScreen({
     }
   };
 
+  /**
+   * Normaliza la respuesta de la API de estado HRV a la interfaz HRVStatus.
+   * Maneja las distintas formas en que el backend puede devolver los datos.
+   */
   const normalizeStatus = (payload: any): HRVStatus => {
     const statusObj = payload?.status || {};
     const avgObj = payload?.average || {};
@@ -94,6 +109,10 @@ export default function HRVScreen({
     };
   };
 
+  /**
+   * Normaliza la respuesta de la API de disposición al entrenamiento
+   * a la interfaz TrainingReadiness.
+   */
   const normalizeReadiness = (payload: any): TrainingReadiness => {
     const readiness = payload?.readiness || {};
     const hrvScore = safeNumber(readiness?.components?.hrv?.score, 50);
@@ -249,7 +268,7 @@ export default function HRVScreen({
               style={styles.submitBtn}
               onPress={handleSubmitManualHRV}
             >
-              <Text style={styles.submitBtnText}>✓ Submit</Text>
+              <Text style={styles.submitBtnText}>✓ Enviar</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.cancelBtn}
@@ -258,7 +277,7 @@ export default function HRVScreen({
                 setManualHrv('');
               }}
             >
-              <Text style={styles.cancelBtnText}>✕ Cancel</Text>
+              <Text style={styles.cancelBtnText}>✕ Cancelar</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -367,9 +386,9 @@ export default function HRVScreen({
                   </View>
                   <Text style={[
                     styles.readinessLevel,
-                    readiness.readinessLevel === 'Optimal' ? { color: '#2ecc71' } :
-                    readiness.readinessLevel === 'Good' ? { color: '#3498db' } :
-                    readiness.readinessLevel === 'Fair' ? { color: '#f39c12' } :
+                    readiness.readinessLevel === 'Óptimo' ? { color: '#2ecc71' } :
+                    readiness.readinessLevel === 'Bueno' ? { color: '#3498db' } :
+                    readiness.readinessLevel === 'Regular' ? { color: '#f39c12' } :
                     { color: '#e74c3c' }
                   ]}>
                     {readiness.readinessLevel}

@@ -1,3 +1,9 @@
+/**
+ * Gráfico hexagonal (radar) de curva de potencia: muestra los vatios
+ * máximos del ciclista para cada duración en un polígono SVG.
+ * Al pulsar en un punto se muestra el nivel (1-10) y los vatios
+ * que faltan para subir al siguiente nivel.
+ */
 import { useState } from 'react';
 import { View, Text } from 'react-native';
 import Svg, { Polygon, Circle, Line, G, Text as SvgText, Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
@@ -50,6 +56,11 @@ const levels = [
   { level:10, name:'Prof. World Tour' }
 ];
 
+/**
+ * Determina el nivel (1-10) de un ciclista para una duración y vatios dados.
+ * Devuelve también los vatios necesarios para subir al siguiente nivel y
+ * la relación W/kg si se proporciona el peso del atleta.
+ */
 function getLevelForDuration(duration: string, watts: number, weightKg?: number | null): { level: number; name: string; missingW: number; wkg?: number; missingWkg?: number } {
   const thresholds = powerThresholds[duration] || [];
   const wkg = weightKg ? Number((watts / weightKg).toFixed(2)) : undefined;
@@ -80,6 +91,10 @@ function getLevelForDuration(duration: string, watts: number, weightKg?: number 
   return { level: 0, name: 'Sin categoría', missingW, wkg, missingWkg };
 }
 
+/**
+ * Convierte coordenadas polares (radio + ángulo en grados) a cartesianas (x,y)
+ * respecto al centro (cx, cy). El ángulo 0 apunta arriba (norte).
+ */
 function polarToCartesian(cx:number, cy:number, r:number, angleDeg:number){
   const a = (angleDeg-90) * Math.PI/180.0;
   return { x: cx + (r * Math.cos(a)), y: cy + (r * Math.sin(a)) };
@@ -97,7 +112,7 @@ export default function HexPowerChart({ values, size=320, weightKg }: Props){
     })
   );
 
-  // place points evenly around circle
+  // Distribuir los puntos uniformemente alrededor del círculo
   const pointCount = durationsOrder.length;
   const points = durationsOrder.map((d,i)=>{
     const angle = 360 * i / pointCount;
@@ -109,13 +124,13 @@ export default function HexPowerChart({ values, size=320, weightKg }: Props){
     return { d, x: p.x, y: p.y, v, angle };
   });
 
-  // grid: concentric polygons (rings)
+  // Anillos concéntricos de referencia (25%, 50%, 75%, 100%)
   const rings = [0.25,0.5,0.75,1];
 
-  // data polygon path
+  // Trayectoria del polígono de datos (relleno)
   const dataPath = points.map((p,i)=> `${i===0? 'M':'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
 
-  // polygon points string for SVG polygon (for optional outline)
+  // Cadena de puntos para el contorno del polígono SVG
   const dataPointsStr = points.map(p=>`${p.x},${p.y}`).join(' ');
 
   return (
@@ -129,14 +144,14 @@ export default function HexPowerChart({ values, size=320, weightKg }: Props){
         </Defs>
 
         <G>
-          {/* circular radial lines */}
+          {/* Líneas radiales desde el centro */}
           {points.map((pt, i)=>{
             const p = polarToCartesian(cx, cy, radius, pt.angle);
             const lineProps: any = { key: `line-${i}` };
             return <Line {...lineProps} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#e6eef2" strokeWidth={0.6} />;
           })}
 
-          {/* concentric rings */}
+          {/* Anillos de referencia */}
           {rings.map((rFrac, ri)=>{
             const pts = Array.from({length:pointCount}).map((_,i)=>{
               const ang = 360 * i / pointCount;
@@ -147,11 +162,11 @@ export default function HexPowerChart({ values, size=320, weightKg }: Props){
             return <Polygon {...ringProps} points={pts} fill="none" stroke="#dbeef3" strokeWidth={0.8} strokeDasharray={[3,4]} />;
           })}
 
-          {/* data fill + outline */}
+          {/* Relleno y contorno del polígono de datos */}
           <Path d={dataPath} fill="url(#grad)" opacity={0.9} />
           <Polygon points={dataPointsStr} fill="none" stroke="#2b9aa3" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
 
-          {/* points + labels */}
+          {/* Puntos interactivos y etiquetas de duración */}
           {points.map((pt, idx)=> {
             const levelData = getLevelForDuration(pt.d, pt.v, weightKg);
             return (
@@ -159,17 +174,17 @@ export default function HexPowerChart({ values, size=320, weightKg }: Props){
               <Circle cx={pt.x} cy={pt.y} r={6} fill={categoryColor[categoryMap[pt.d]]} stroke="#fff" strokeWidth={1} onPress={()=>{
                 setSelected({x:pt.x,y:pt.y,d:pt.d,v:pt.v, level: levelData.level, name: levelData.name, missingW: levelData.missingW, missingWkg: levelData.missingWkg, wkg: levelData.wkg});
               }} />
-              {/* duration label slightly outside */}
+              {/* Etiqueta de duración un poco más afuera */}
               {(() => {
                 const labelPos = polarToCartesian(cx, cy, radius + 14, pt.angle);
                 return <SvgText x={labelPos.x} y={labelPos.y} fontSize="10" fill="#0b2733" textAnchor="middle" fontWeight="600">{pt.d}</SvgText>;
               })()}
-              {/* numeric watts label under each point (W only) */}
+              {/* Vatios debajo del punto */}
               <SvgText x={pt.x} y={pt.y + 16} fontSize="10" fill="#08323a" textAnchor="middle">{Math.round(pt.v)} W</SvgText>
             </G>
           )})}
 
-          {/* tooltip */}
+          {/* Tooltip al pulsar un punto */}
           {selected && (
             <G>
               <Rect x={Math.max(8, selected.x - 70)} y={Math.max(8, selected.y - 78)} rx={8} ry={8} width={140} height={70} fill="#ffffff" opacity={0.98} stroke="#2b9aa3" strokeWidth={2} />

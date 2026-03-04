@@ -1,3 +1,8 @@
+/**
+ * Pantalla de análisis de terreno: detecta los puertos de una actividad,
+ * permite comparar con puertos famosos del pro-ciclismo y simular el tiempo
+ * estimado del ciclista en esos puertos según su FTP y peso.
+ */
 import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -62,12 +67,18 @@ export default function TerrainScreen({
   apiBase = 'http://localhost:3001',
   activityId,
 }: Props) {
+  // Tab activa: puertos de la actividad / puertos famosos / simulación
   const [activeTab, setActiveTab] = useState<'activity' | 'famous' | 'simulate'>('activity');
   const [loading, setLoading] = useState(true);
+  // Puertos detectados en la actividad seleccionada
   const [climbs, setClimbs] = useState<Climb[]>([]);
+  // Base de datos de puertos famosos del pro-ciclismo
   const [famousClimbs, setFamousClimbs] = useState<FamousClimb[]>([]);
+  // Puerto famoso seleccionado para simulación
   const [selectedClimb, setSelectedClimb] = useState<FamousClimb | null>(null);
+  // Tiempo proyectado del atleta en el puerto seleccionado
   const [projectedTime, setProjectedTime] = useState<string | null>(null);
+  // Datos del atleta para la simulación (FTP, peso, W/kg)
   const [athleteSimData, setAthleteSimData] = useState<{ftp:number; weight:number; wkg:string; profileComplete:boolean} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activities, setActivities] = useState<any[]>([]);
@@ -184,7 +195,7 @@ export default function TerrainScreen({
         const proRec = sim?.proRecord;
         const comparison = sim?.comparison;
 
-        // Build advice/comparison text
+        // Construir texto de comparación con el récord profesional
         let adviceText = '';
         if (!data?.athlete?.profileComplete) {
           adviceText = '⚠️ Usando valores por defecto (FTP 200W, peso 70kg). Configura tu perfil para una estimación real.';
@@ -196,7 +207,7 @@ export default function TerrainScreen({
           }
         }
 
-        // Build a FamousClimb from the simulate response
+        // Construir objeto FamousClimb con los datos de la respuesta simulada
         const climbData: FamousClimb = {
           id: climbId,
           name: climbRaw?.name || climbId,

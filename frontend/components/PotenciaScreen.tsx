@@ -1,3 +1,8 @@
+/**
+ * Pantalla de potencia: muestra la curva de potencia (peak power) del ciclista,
+ * su perfil (sprinter / escalador / rodador), niveles por duración y
+ * el tiempo en zonas de potencia relativo al FTP.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import HexPowerChart, { durationsOrder } from './HexPowerChart';
@@ -134,7 +139,7 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
   // Análisis de perfil del ciclista
   const cyclistProfile = analyzeCyclistProfile(powerMap);
   
-  // build detailed list per duration con niveles reales
+  // Construir lista detallada por duración con niveles reales
   const rows = durationsOrder.map(d => {
     const v = powerMap[d] || 0;
     const levelData = getLevelForDuration(d, v);
@@ -156,18 +161,21 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
       progress: Math.max(0, Math.min(1, progress))
     };
   });
-  // categories and grouping
+  // categories and grouping (categorias de duración)
   const sprint = ['5s','15s','30s','1m'];
   const ataque = ['2m','3m','5m','10m'];
   const ascenso = ['15m','20m','30m','45m','1h'];
+  // Categoría expandida en el acordeon
   const [openCat, setOpenCat] = useState<'Sprint'|'Ataque'|'Ascenso'|null>('Sprint');
 
+  // Habilitar animaciones de layout en Android
   useEffect(()=>{
     if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
   },[]);
 
+  // Renderiza una categoría con acordeon expandible
   const renderCategory = (name:string, list:string[])=> (
     <View style={styles.category}>
       <TouchableOpacity style={styles.catHeader} onPress={()=>{ LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setOpenCat(openCat===name? null : (name as any)); }}>

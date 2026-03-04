@@ -1,3 +1,8 @@
+/**
+ * Pantalla de detalle de actividad: muestra el mapa con la ruta,
+ * gráficos de vatios/FC/altitud, métricas de nutrición y fisiológicas
+ * de una actividad individual de Strava.
+ */
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import { SvgXml } from 'react-native-svg';
@@ -13,6 +18,10 @@ type Props = {
   onBack: () => void;
 };
 
+/**
+ * Decodifica una polilínea codificada en formato Google Encoded Polyline
+ * (usada por Strava) a un array de coordenadas [lat, lng].
+ */
 function decodePolyline(encoded: string): [number, number][] {
   if (!encoded) return [];
   const points: [number, number][] = [];
@@ -44,11 +53,14 @@ function decodePolyline(encoded: string): [number, number][] {
 }
 
 export default function ActivityDetailScreen({ activityId, jwt, profile, apiBase = 'http://localhost:3001', onBack }: Props) {
+  // Datos completos de la actividad (metadatos + streams + analytics)
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Referencia al mapa para centrar/hacer fitToCoordinates
   const mapRef = useRef<MapView>(null);
 
+  // Pedir datos de actividad al montar el componente
   useEffect(() => {
     if (!jwt || !activityId) return;
     setLoading(true);
@@ -106,7 +118,7 @@ export default function ActivityDetailScreen({ activityId, jwt, profile, apiBase
   const sport = activity.sport_type || activity.type || 'Ride';
   const isCycling = sport.toLowerCase().includes('ride') || sport.toLowerCase().includes('cycling') || sport.toLowerCase().includes('bike');
 
-  // Extraer streams
+  // Extraer streams (series temporales) de la respuesta de la API
   let latlngData: [number, number][] = [];
   let wattsData: number[] = [];
   let hrData: number[] = [];

@@ -1,3 +1,8 @@
+/**
+ * Pantalla de actividades: muestra el listado de actividades de Strava
+ * con detalle expandible, potencia normalizada, histograma de potencia
+ * y estimación de sustratos calorínicos (carbohidratos/grasas).
+ */
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
 import Svg, { Rect, G, Text as SvgText } from 'react-native-svg';
@@ -10,13 +15,20 @@ type Props = {
   onSelectActivity: (activityId: number) => void;
 };
 
+/**
+ * Convierte segundos a formato horas y minutos (p.ej. 3661 -> "1h 1m")
+ */
 function secondsToHhMm(s:number){
   const h = Math.floor(s/3600); const m = Math.round((s%3600)/60);
   return `${h}h ${m}m`;
 }
 
+/**
+ * Estima el porcentaje de calorías quemadas de grasas y carbohidratos
+ * según la intensidad relativa (vatios vs FTP + FC vs FC max).
+ */
 function estimateCaloriesBreakdown(avgWatts:number, avgHR:number|null, profile:any){
-  // Use both power (FTP-based) and heart rate to estimate substrate utilization
+  // Calcular intensidad basada en potencia (relativa al FTP)
   const ftp = profile && profile.ftp ? profile.ftp : null;
   const hrMax = profile && profile.hr_max ? profile.hr_max : null;
   const hrRest = profile && profile.hr_rest ? profile.hr_rest : null;
@@ -24,34 +36,38 @@ function estimateCaloriesBreakdown(avgWatts:number, avgHR:number|null, profile:a
   let intensityPower = 0.5;
   let intensityHR = 0.5;
   
-  // Calculate power-based intensity
+  // Intensidad basada en potencia relativa al FTP
   if (ftp && ftp > 0) {
     intensityPower = avgWatts / ftp;
   } else {
     intensityPower = avgWatts / 250; // fallback
   }
   
-  // Calculate HR-based intensity (% of HR reserve)
+  // Intensidad basada en frecuencia cardíaca (% de reserva de FC)
   if (avgHR && hrMax && hrRest && hrMax > hrRest) {
     const hrReserve = hrMax - hrRest;
     intensityHR = (avgHR - hrRest) / hrReserve;
   }
   
-  // Average both metrics if HR available, otherwise use power only
+  // Combinar ambas métricas si hay FC disponible
   const intensity = (avgHR && hrMax && hrRest) ? (intensityPower + intensityHR) / 2 : intensityPower;
   
-  // Substrate utilization curves based on intensity
+  // Curvas de utilización de sustratos según intensidad por zonas
   let carbs = 0.5, fats = 0.5;
-  if (intensity < 0.55) { carbs = 0.25; fats = 0.75; } // Z1: mainly fat
-  else if (intensity < 0.75) { carbs = 0.40; fats = 0.60; } // Z2: fat-burning
-  else if (intensity < 0.90) { carbs = 0.55; fats = 0.45; } // Z3: mixed
-  else if (intensity < 1.05) { carbs = 0.75; fats = 0.25; } // Z4: mainly carbs
-  else { carbs = 0.90; fats = 0.10; } // Z5: almost all carbs
+  if (intensity < 0.55) { carbs = 0.25; fats = 0.75; } // Z1: principalmente grasa
+  else if (intensity < 0.75) { carbs = 0.40; fats = 0.60; } // Z2: quema de grasas
+  else if (intensity < 0.90) { carbs = 0.55; fats = 0.45; } // Z3: mezcla
+  else if (intensity < 1.05) { carbs = 0.75; fats = 0.25; } // Z4: principalmente carbohidratos
+  else { carbs = 0.90; fats = 0.10; } // Z5: casi todo carbohidratos
   
   return { carbsPct: Math.round(carbs*100), fatsPct: Math.round(fats*100) };
 }
 
-// compute Normalized Power from power stream (array of watts) using 30s rolling avg
+/**
+ * Calcula la Potencia Normalizada (NP) desde el stream de vatios
+ * usando media móvil de 30 segundos elevada a la cuarta potencia.
+ */
+// Último parámetro: paso de tiempo en segundos (por defecto 1s por muestra)
 function computeNPFromStream(powerStream:number[], timeStepSec=1){
   if (!powerStream || powerStream.length===0) return null;
   const window = 30; // seconds
@@ -82,10 +98,11 @@ export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001
     loadActivities();
   }, [jwt]);
 
+  // Carga actividades desde caché AsyncStorage o desde la API de Strava
   const loadActivities = async () => {
     setLoading(true);
     try {
-      // Try cache first
+      // Intentar caché primero para respuesta instantánea
       const cacheKey = CACHE_KEYS.ACTIVITIES(profile?.athlete_id || 'unknown');
       const cached = await cacheService.get<any[]>(cacheKey, CACHE_TTL.ACTIVITIES);
       
@@ -97,7 +114,7 @@ export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001
         return;
       }
 
-      // Fetch from API
+      // Sin caché válida: pedir a la API
       console.log('[ActivitiesScreen] Fetching activities from API');
       const response = await fetch(`${apiBase}/strava/activities`, { 
         headers: { Authorization: `Bearer ${jwt}` } 
@@ -132,7 +149,7 @@ export default function ActivitiesScreen({ jwt, apiBase = 'http://localhost:3001
     try {
       const res = await fetch(`${apiBase}/strava/activities/${id}/streams?keys=time,watts,distance`, { headers: { Authorization: `Bearer ${jwt}` } });
       const data = await res.json();
-      // Normalize if data is array of objects
+      // Normalizar respuesta: puede ser array de objetos (por tipo) o objeto con clave 'watts'
       let wattsArray: number[] | null = null;
       if (data && Array.isArray(data)){
         const watts = data.find((s:any)=>s.type === 'watts' || s.type === 'power');
@@ -230,7 +247,7 @@ function computeApproxNP(avg:number, durationSec:number){
   return Math.round(avg * mult);
 }
 
-// Render sparkline as small vertical bars to avoid complex paths
+// Pinta una sparkline como barras verticales pequeñas (evita trazados SVG complejos)
 function renderSparkline(values:number[], width:number, height:number, offsetX:number){
   const max = Math.max(...values, 1);
   const step = Math.max(1, Math.floor(values.length / width));
@@ -246,7 +263,7 @@ function renderSparkline(values:number[], width:number, height:number, offsetX:n
   return bars;
 }
 
-// Render histogram with nBuckets
+// Pinta un histograma de potencia agrupado en nBuckets columnas
 function renderHistogram(values:number[], buckets:number, width:number, barHeight:number, offsetY:number){
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);

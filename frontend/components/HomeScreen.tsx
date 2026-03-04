@@ -1,3 +1,8 @@
+/**
+ * Pantalla principal: muestra el Performance Management Chart (PMC)
+ * con las métricas CTL (forma cronica), ATL (fatiga aguda) y TSB (forma/frescura)
+ * calculadas a partir de las actividades de Strava.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { SvgXml } from 'react-native-svg';
@@ -36,10 +41,13 @@ interface Props {
 }
 
 const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase = 'http://localhost:3001' }) => {
+  // Vista temporal seleccionada (semanal / mensual / anual)
   const [view, setView] = useState<ViewType>('weekly');
   const [loading, setLoading] = useState(false);
+  // Datos del PMC devueltos por la API
   const [pmcData, setPmcData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  // Indica si los datos provienen de la caché
   const [usingCache, setUsingCache] = useState(false);
 
 
@@ -64,7 +72,7 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
     setError(null);
 
     try {
-      // Try cache first
+      // Intentar caché primero para respuesta instantánea
       const cacheKey = CACHE_KEYS.PMC(profile?.athlete_id || 'unknown');
       const cached = await cacheService.get<any>(cacheKey, CACHE_TTL.ACTIVITIES);
       
@@ -76,7 +84,7 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
         return;
       }
 
-      console.log('[loadPMCData] No cache available, fetching from API');
+      // Sin caché válida: pedir a la API (730 días de historial)
       const response = await fetch(`${apiBase}/strava/pmc?view=all&days=730`, {
         headers: { Authorization: `Bearer ${jwt}` }
       });
@@ -90,7 +98,7 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
       const data = await response.json();
       console.log('[loadPMCData] Success! Got data with daily entries:', data.daily?.length || 0);
       
-      // Cache the result
+      // Guardar resultado en caché para próximas cargas
       await cacheService.set(cacheKey, data);
       setUsingCache(false);
       setPmcData(data);
@@ -102,6 +110,7 @@ const HomeScreen: React.FC<Props> = ({ jwt, profile, onLoadActivities, apiBase =
     }
   };
 
+  // Tarjeta de métrica (CTL, ATL o TSB) con borde de color
   const renderMetricCard = (label: string, value: string | number, color: string, subtitle?: string) => (
     <View style={[styles.metricCard, { borderLeftColor: color }]}>
       <Text style={styles.metricLabel}>{label}</Text>

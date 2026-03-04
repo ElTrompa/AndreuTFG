@@ -1,3 +1,8 @@
+/**
+ * Menú lateral deslizante (hamburguesa) con enlace a todas las pantallas
+ * de la aplicación: navegación principal (CORE), analítica básica (ANALYTICS)
+ * y funciones avanzadas (ADVANCED).
+ */
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { colors } from '../theme';
@@ -9,8 +14,10 @@ type Props = {
 };
 
 export default function HamburgerMenu({ open, onClose, navigate }: Props){
+  // No renderizar nada si el menú está cerrado
   if (!open) return null;
   
+  // Navegar a pantalla y cerrar el menú automáticamente
   const handleNavigate = (screen: string) => {
     navigate(screen);
     onClose();
@@ -21,7 +28,7 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
       <ScrollView style={styles.menu} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
         <Text style={styles.title}>🚴 RideMetrics</Text>
         
-        {/* Core Navigation */}
+        {/* Navegación principal: Inicio, Actividades, Perfil */}
         <Text style={styles.sectionTitle}>CORE</Text>
         <TouchableOpacity style={styles.item} onPress={() => handleNavigate('Home')}>
           <Text style={styles.itemIcon}>🏠</Text>
@@ -38,7 +45,7 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
           <Text style={styles.itemText}>Perfil</Text>
         </TouchableOpacity>
 
-        {/* Traditional Analytics */}
+        {/* Análisis tradicionales de ciclismo */}
         <Text style={styles.sectionTitle}>ANALYTICS</Text>
         <TouchableOpacity style={styles.item} onPress={() => handleNavigate('Potencia')}>
           <Text style={styles.itemIcon}>⚡</Text>
@@ -55,7 +62,7 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
           <Text style={styles.itemText}>Palmarés (KOMs)</Text>
         </TouchableOpacity>
 
-        {/* Advanced Features */}
+        {/* Funciones avanzadas de análisis de rendimiento */}
         <Text style={[styles.sectionTitle, { marginTop: 12 }]}>🚀 ADVANCED (NEW!)</Text>
         
         <TouchableOpacity 
@@ -64,8 +71,8 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
         >
           <Text style={styles.itemIcon}>🔮</Text>
           <View>
-            <Text style={styles.itemText}>Advanced Analytics</Text>
-            <Text style={styles.itemSubText}>FTP • CP • PMC Forecast</Text>
+            <Text style={styles.itemText}>Analíticas Avanzadas</Text>
+            <Text style={styles.itemSubText}>FTP • CP • Pronóstico PMC</Text>
           </View>
         </TouchableOpacity>
 
@@ -87,7 +94,7 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
           <Text style={styles.itemIcon}>📊</Text>
           <View>
             <Text style={styles.itemText}>Métricas Avanzadas</Text>
-            <Text style={styles.itemSubText}>VI • Pacing • Peaks • Efficiency</Text>
+            <Text style={styles.itemSubText}>VI • Ritmo • Picos • Eficiencia</Text>
           </View>
         </TouchableOpacity>
 
@@ -97,8 +104,8 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
         >
           <Text style={styles.itemIcon}>❤️</Text>
           <View>
-            <Text style={styles.itemText}>HRV & Recovery</Text>
-            <Text style={styles.itemSubText}>Heart Rate Variability Analysis</Text>
+            <Text style={styles.itemText}>HRV y Recuperación</Text>
+            <Text style={styles.itemSubText}>Análisis de Variabilidad Cardíaca</Text>
           </View>
         </TouchableOpacity>
 
@@ -108,8 +115,8 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
         >
           <Text style={styles.itemIcon}>⛰️</Text>
           <View>
-            <Text style={styles.itemText}>Terrain Analysis</Text>
-            <Text style={styles.itemSubText}>Climb Detection • Simulation</Text>
+            <Text style={styles.itemText}>Análisis de Terreno</Text>
+            <Text style={styles.itemSubText}>Detección de Puertos • Simulación</Text>
           </View>
         </TouchableOpacity>
 
@@ -120,12 +127,13 @@ export default function HamburgerMenu({ open, onClose, navigate }: Props){
           <Text style={styles.itemIcon}>🎯</Text>
           <View>
             <Text style={styles.itemText}>Clasificador de Sesiones</Text>
-            <Text style={styles.itemSubText}>AI Training Type Detection</Text>
+            <Text style={styles.itemSubText}>Detección IA de Tipo de Entrenamiento</Text>
           </View>
         </TouchableOpacity>
 
         <View style={{ height: 20 }} />
       </ScrollView>
+      {/* Capa oscura transparente para cerrar al tocar fuera del menú */}
       <TouchableOpacity style={styles.overlay} onPress={onClose} />
     </View>
   );

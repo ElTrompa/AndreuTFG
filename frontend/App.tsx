@@ -1,6 +1,7 @@
 /**
- * Main App Component
- * Loads responder fix first to suppress React Native web warnings
+ * Componente principal de la aplicación RideMetrics
+ * Carga el fix de responder para suprimir advertencias de React Native Web
+ * Gestiona la autenticación con Strava y la navegación entre pantallas
  */
 import './responderFix';
 
@@ -61,9 +62,12 @@ const logoXml = `<?xml version="1.0" encoding="UTF-8"?>
 </svg>`;
 
 export default function App() {
+  // Estado de navegación
   const [menuOpen, setMenuOpen] = useState(false);
   const [screen, setScreen] = useState<'Home'|'Potencia'|'Proyecciones'|'Settings'|'Profile'|'Activities'|'ActivityDetail'|'Palmares'|'AdvancedAnalytics'|'MetricasAvanzadas'|'HRV'|'Terrain'|'SessionClassifier'|'RoutesSearch'>('Home');
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
+
+  // Estado de autenticación y datos del atleta
   const [jwt, setJwt] = useState<string | null>(null);
   const [athlete, setAthlete] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
@@ -72,9 +76,11 @@ export default function App() {
   const [statsLoaded, setStatsLoaded] = useState(false);
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
   const [authState, setAuthState] = useState<string | null>(null);
-  const pollRef = useRef<any>(null);
+  const pollRef = useRef<any>(null); // referencia al intervalo de polling OAuth
   const [powerData, setPowerData] = useState<Record<string, number> | null>(null);
   const [profile, setProfile] = useState<any>(null);
+
+  // Etiqueta del atleta: username o nombre completo
   const athleteLabel = useMemo(() => {
     if (!athlete) return '';
     if (athlete.username) return athlete.username;
@@ -89,11 +95,11 @@ export default function App() {
       if (!res.ok) return Alert.alert('Error', JSON.stringify(data));
       const { url, state } = data;
       setAuthState(state);
-      // Open browser for user authorization
+      // Abrir navegador para que el usuario autorice la app en Strava
       const supported = await Linking.canOpenURL(url);
       if (supported) await Linking.openURL(url);
 
-      // Start polling for JWT
+      // Iniciar polling para esperar la respuesta OAuth con el JWT
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = setInterval(async () => {
         try {
@@ -101,7 +107,7 @@ export default function App() {
           const pd = await p.json();
           if (p.ok && pd.ok && pd.jwt) {
             setJwt(pd.jwt);
-            // fetch athlete
+            // Cargar datos del atleta tras login exitoso
             try {
               const a = await fetch(`${API_BASE_URL}/strava/athlete`, { headers: { Authorization: `Bearer ${pd.jwt}` } });
               if (a.ok) setAthlete(await a.json());
@@ -118,7 +124,7 @@ export default function App() {
     }
   };
 
-  // Handle deep links / app scheme callbacks to receive `jwt` or `access_token`
+  // Gestionar deep links / esquema de la app para recibir `jwt` o `access_token`
   useEffect(() => {
     const processUrl = async (url: string | null) => {
       if (!url) return;
@@ -128,13 +134,13 @@ export default function App() {
 
       if (params.jwt) {
         setJwt(params.jwt);
-        // fetch athlete profile
+        // Obtener perfil del atleta con el nuevo JWT
         try {
           const res = await fetch(`${API_BASE_URL}/strava/athlete`, { headers: { Authorization: `Bearer ${params.jwt}` } });
           if (res.ok) setAthlete(await res.json());
-        } catch (e) { /* ignore */ }
+        } catch (e) { /* ignorar */ }
       } else if (params.access_token) {
-        // exchange single-user token for a JWT on the backend
+        // Intercambiar token de usuario único por JWT en el backend
         try {
           const res = await fetch(`${API_BASE_URL}/auth/token-login`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ access_token: params.access_token })
@@ -160,7 +166,7 @@ export default function App() {
     };
   }, []);
 
-  // Fetch saved profile when jwt changes
+  // Cargar perfil guardado cada vez que cambia el JWT
   useEffect(() => {
     if (!jwt) { setProfile(null); return; }
     setAutoLoadAttempted(false);
@@ -204,7 +210,7 @@ export default function App() {
       setActivities(Array.isArray(activitiesData) ? activitiesData : []);
       setStatsLoaded(true);
 
-      // refresh profile too
+      // Refrescar perfil también al cargar actividades
       try {
         const pr = await fetch(`${API_BASE_URL}/profile`, { headers: { Authorization: `Bearer ${jwt}` } });
         if (pr.ok) {
@@ -219,14 +225,14 @@ export default function App() {
       setLoading(false);
     }
 
-    // Cargar curva de potencia en background SIN bloquear la UI
-    // Primero intenta obtener desde caché (instantáneo), si no hay inicia cómputo en background
+    // Cargar curva de potencia en segundo plano SIN bloquear la UI
+    // Primero intenta caché (instantáneo), si no hay lanza cómputo en segundo plano
     loadPowerCurveBackground(jwt);
   };
 
   const loadPowerCurveBackground = async (token: string) => {
     try {
-      // 1. Intentar obtener datos cacheados (max_age=24h, devuelve rápido si tiene caché)
+      // 1. Intentar obtener datos cacheados (máx. 24h, rápido si hay caché)
       const cachedRes = await fetch(
         `${API_BASE_URL}/strava/power-curve?max_age_hours=24`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -239,19 +245,19 @@ export default function App() {
         }
       }
 
-      // 2. Si no hay caché o caducó, lanzar cómputo en background (no bloquea)
-      // Solo 90 días de datos para que sea rápido
+      // 2. Si no hay caché o caducó, lanzar cómputo en segundo plano (no bloquea la UI)
+      // Solo 90 días de datos para que sea más rápido
       fetch(
         `${API_BASE_URL}/strava/power-curve?days=90&per_page=200&max_pages=5&background=true`,
         { headers: { Authorization: `Bearer ${token}` } }
       ).catch(() => {});
 
     } catch (e) {
-      // La curva de potencia es opcional, no mostrar error
+      // La curva de potencia es opcional, no mostrar error al usuario
     }
   };
 
-  // Auto-load athlete + activities once after login (replaces old manual button)
+  // Auto-cargar atleta + actividades una vez tras el login
   useEffect(() => {
     if (!jwt) {
       setActivities([]);
@@ -286,7 +292,7 @@ export default function App() {
     };
   }, [activities]);
 
-  // Build a fallback power map for the chart from activities (approximation)
+  // Construir mapa de potencia aproximado desde actividades (como fallback si no hay caché)
   const approxPowerMap = useMemo(() => {
     const map: Record<string, number> = {} as any;
     const durations = ['5s','15s','30s','1m','2m','3m','5m','10m','15m','20m','30m','45m','1h'];

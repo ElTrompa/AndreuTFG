@@ -1,3 +1,8 @@
+/**
+ * Pantalla de perfil: permite al usuario editar y guardar sus datos fisiológicos
+ * (altura, peso, FTP, VO2max, FC máxima y FC en reposo) que usarán los demás
+ * algoritmos de entrenamiento de la aplicación.
+ */
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, ScrollView } from 'react-native';
 
@@ -8,9 +13,12 @@ type Props = {
 };
 
 export default function ProfileScreen({ jwt, apiBase = 'http://localhost:3001', onSaved }: Props){
+  // Estado del perfil (campos editables)
   const [profile, setProfile] = useState<any>({});
+  // Estado de carga para deshabilitar el botón mientras se hace fetch/PUT
   const [loading, setLoading] = useState(false);
 
+  // Cargar perfil al montar (si hay JWT válido)
   useEffect(()=>{
     if (!jwt) return;
     setLoading(true);
@@ -21,6 +29,7 @@ export default function ProfileScreen({ jwt, apiBase = 'http://localhost:3001', 
       .finally(()=>setLoading(false));
   }, [jwt]);
 
+  // Guardar cambios del perfil mediante PUT /profile
   const save = async () => {
     if (!jwt) return Alert.alert('No autorizado');
     setLoading(true);

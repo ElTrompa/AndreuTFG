@@ -1,3 +1,8 @@
+/**
+ * Pantalla de proyecciones: calcula y muestra una estimación de los
+ * kilómetros que el ciclista realizará al final del año, basándose
+ * en el ritmo de las últimas 6 semanas y los km ya acumulados.
+ */
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
@@ -5,6 +10,9 @@ type Props = {
   activities: any[];
 };
 
+/**
+ * Devuelve la fecha del inicio de semana (lunes) para una fecha dada.
+ */
 function getWeekStart(d: Date){
   const copy = new Date(d);
   const day = copy.getDay();
@@ -19,23 +27,23 @@ export default function ProyeccionesScreen({ activities }: Props){
   const year = now.getFullYear();
 
   const data = useMemo(()=>{
-    // filter this year
+    // Filtrar actividades de este año
     const thisYear = activities.filter(a => a.start_date && new Date(a.start_date).getFullYear() === year);
     const totalKm = thisYear.reduce((acc,a) => acc + ((a.distance||0)/1000), 0);
 
-    // weeks passed in year
+    // Semanas transcurridas desde el 1 de enero
     const startOfYear = new Date(year,0,1);
     const weeksPassed = Math.max(1, Math.floor((now.getTime() - startOfYear.getTime()) / (7*24*3600*1000)) + 1);
 
     const baselineWeekly = totalKm / weeksPassed;
 
-    // compute last 6 weeks weekly km
+    // Calcular km de las últimas 6 semanas y su media semanal
     const sixWeeksAgo = new Date(now.getTime() - 6 * 7 * 24 * 3600 * 1000);
     const recent = activities.filter(a => a.start_date && new Date(a.start_date) >= sixWeeksAgo);
     const recentKm = recent.reduce((acc,a) => acc + ((a.distance||0)/1000), 0);
     const avgLast6 = recentKm / 6;
 
-    // trend factor
+    // Factor de tendencia: ritmo reciente vs media anual
     const trendFactor = avgLast6 / Math.max(0.0001, baselineWeekly);
 
     const weeksRemaining = Math.max(0, 52 - weeksPassed);

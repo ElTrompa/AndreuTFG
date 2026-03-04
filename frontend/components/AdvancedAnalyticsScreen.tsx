@@ -1,3 +1,8 @@
+/**
+ * Pantalla de analíticas avanzadas: muestra la estimación de FTP,
+ * el modelo de Potencia Crítica (CP / W') y el pronóstico del PMC
+ * (CTL, ATL y TSB para los próximos días).
+ */
 import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -61,10 +66,14 @@ export default function AdvancedAnalyticsScreen({
   jwt,
   apiBase = 'http://localhost:3001',
 }: Props) {
+  // Tab activa: 'ftp' o 'pmc'
   const [activeTab, setActiveTab] = useState<'ftp' | 'pmc'>('ftp');
   const [loading, setLoading] = useState(true);
+  // Datos de FTP y tendencia
   const [ftpData, setFtpData] = useState<FTPData | null>(null);
+  // Datos del modelo de Potencia Crítica
   const [cpData, setCpData] = useState<CriticalPowerData | null>(null);
+  // Pronóstico de PMC (CTL/ATL/TSB futuros)
   const [pmcData, setPmcData] = useState<PMCForecast | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,7 +86,7 @@ export default function AdvancedAnalyticsScreen({
       setLoading(true);
       setError(null);
 
-      // Fetch all advanced analytics in parallel
+      // Cargar todas las analíticas avanzadas en paralelo para mayor velocidad
       const [ftpRes, cpRes, pmcRes] = await Promise.all([
         fetch(`${apiBase}/advanced/ftp-prediction`, {
           headers: { Authorization: `Bearer ${jwt}` },
@@ -167,23 +176,23 @@ export default function AdvancedAnalyticsScreen({
             {/* FTP Card */}
             {ftpData && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>📊 FTP Analysis</Text>
+                <Text style={styles.cardTitle}>📊 Análisis de FTP</Text>
                 <View style={styles.cardContent}>
                   <View style={styles.metric}>
-                    <Text style={styles.metricLabel}>Current FTP</Text>
+                    <Text style={styles.metricLabel}>FTP Actual</Text>
                     <Text style={styles.metricValue}>{ftpData.currentFTP}W</Text>
                   </View>
                   <View style={styles.metric}>
-                    <Text style={styles.metricLabel}>Estimated FTP</Text>
+                    <Text style={styles.metricLabel}>FTP Estimado</Text>
                     <Text style={styles.metricValue}>
                       {ftpData.prediction.ftpEstimated}W
                     </Text>
                     <Text style={styles.metricSubtext}>
-                      Method: {ftpData.prediction.method}
+                      Método: {ftpData.prediction.method}
                     </Text>
                   </View>
                   <View style={styles.metric}>
-                    <Text style={styles.metricLabel}>90-Day Trend</Text>
+                    <Text style={styles.metricLabel}>Tendencia 90 días</Text>
                     <Text style={styles.metricValue}>{ftpData.trend.recentAvg}W</Text>
                     <Text style={styles.metricSubtext}>{ftpData.trend.trend}</Text>
                   </View>
@@ -245,8 +254,8 @@ export default function AdvancedAnalyticsScreen({
                 <Text style={styles.cardTitle}>📈 Proyección PMC</Text>
                 <Text style={styles.cardSubtitle}>
                   El modelo Performance Management Chart (PMC) te ayuda a gestionar tu forma física. 
-                  CTL (Chronic Training Load) mide tu forma acumulada, ATL (Acute Training Load) mide tu fatiga reciente, 
-                  y TSB (Training Stress Balance) indica tu estado de forma - positivo significa descansado, negativo significa fatigado.
+                  CTL (Carga Crónica de Entrenamiento) mide tu forma acumulada, ATL (Carga Aguda de Entrenamiento) mide tu fatiga reciente, 
+                  y TSB (Balance de Estrés de Entrenamiento) indica tu estado de forma: positivo significa descansado, negativo significa fatigado.
                 </Text>
                 <View style={styles.cardContent}>
                   <View style={styles.currentStatus}>

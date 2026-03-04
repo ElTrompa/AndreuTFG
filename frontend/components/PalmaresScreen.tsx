@@ -1,3 +1,7 @@
+/**
+ * Pantalla de palmarés: muestra los logros del ciclista en Strava
+ * (KOMs, Top-10, podios y leyendas locales), con caché de 24 horas.
+ */
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,10 +26,13 @@ type Props = {
   apiBase?: string;
 };
 
-// Cache settings
+// Configuración de caché local para el palmárés
 const CACHE_KEY = 'ridemetrics_achievements_cache';
-const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 horas
 
+/**
+ * Formatea un tiempo en segundos a MM:SS o HH:MM:SS
+ */
 function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -54,7 +61,7 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
   const [error, setError] = useState<string | null>(null);
   const [usingCache, setUsingCache] = useState(false);
 
-  // Load cached data
+  // Cargar datos en caché (si no han expirado)
   const loadCachedAchievements = async () => {
     try {
       const cached = await AsyncStorage.getItem(CACHE_KEY);
@@ -63,7 +70,7 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
         const cacheAge = Date.now() - data.timestamp;
         
         if (cacheAge < CACHE_EXPIRY_MS) {
-          // Use cached data
+          // Usar datos en caché
           setKoms(data.koms || []);
           setTop10(data.top10 || []);
           setPodios(data.podios || []);
@@ -79,7 +86,7 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
     return false;
   };
 
-  // Save to cache
+  // Guardar logros en caché con timestamp
   const cacheAchievements = async (data: any) => {
     try {
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
@@ -91,11 +98,11 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
     }
   };
 
-  // Fetch achievements
+  // Obtener logros del servidor (o usar caché si no se fuerza recarga)
   const fetchAchievements = async (forceRefresh = false) => {
     if (!jwt) return;
 
-    // If not forcing refresh, try cache first
+    // Si no se fuerza recarga, intentar caché primero
     if (!forceRefresh) {
       const hasCached = await loadCachedAchievements();
       if (hasCached) {
@@ -124,12 +131,12 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
       setLocalLegends(data.localLegends || []);
       setStats(data.stats || null);
 
-      // Cache the results
+      // Guardar resultados en caché para futuras visitas
       await cacheAchievements(data);
     } catch (err: any) {
       console.error('Error fetching achievements:', err);
       
-      // On error, try to load from cache as fallback
+      // En caso de error, intentar usar caché como fallback
       const hasCached = await loadCachedAchievements();
       if (hasCached) {
         setUsingCache(true);
@@ -146,7 +153,7 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
   }, [jwt, apiBase]);
 
   const renderAchievementCard = (achievement: Achievement, showRank: boolean = false, index: number = 0) => {
-    const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32']; // Gold, Silver, Bronze
+    const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32']; // Oro, Plata, Bronce
     const rankColor = achievement.rank && achievement.rank <= 3 
       ? rankColors[achievement.rank - 1] 
       : '#4299e1';

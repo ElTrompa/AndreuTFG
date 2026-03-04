@@ -1,3 +1,8 @@
+/**
+ * Pantalla de métricas avanzadas de ciclismo: índice de variabilidad (VI),
+ * análisis de ritmo (pacing), récords por duración y tendencia de eficiencia
+ * aeróbica (factor de eficiencia + desacoplo aeróbico).
+ */
 import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -60,9 +65,12 @@ export default function MetricasAvanzadasScreen({
   apiBase = 'http://localhost:3001',
   activityId,
 }: Props) {
+  // Tab activa: vi / pacing / peaks / efficiency
   const [activeTab, setActiveTab] = useState<'vi' | 'pacing' | 'peaks' | 'efficiency'>('vi');
   const [loading, setLoading] = useState(true);
+  // Métricas avanzadas de la actividad seleccionada
   const [metrics, setMetrics] = useState<AdvancedMetrics | null>(null);
+  // Tendencia de eficiencia por semanas
   const [trendData, setTrendData] = useState<EfficiencyTrends | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activities, setActivities] = useState<any[]>([]);

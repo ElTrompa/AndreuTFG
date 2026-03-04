@@ -1,3 +1,8 @@
+/**
+ * Pantalla de clasificador de sesiones: detecta automáticamente
+ * el tipo de entrenamiento (Sweet Spot, VO2max, polarizado, etc.)
+ * a partir de las métricas de potencia (IF, VI, tiempo en zonas).
+ */
 import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -53,11 +58,15 @@ export default function SessionClassifierScreen({
   apiBase = 'http://localhost:3001',
   activityId,
 }: Props) {
+  // Tab activa: clasificación de la sesión o distribución del entrenamiento
   const [activeTab, setActiveTab] = useState<'classification' | 'distribution'>('classification');
   const [loading, setLoading] = useState(true);
+  // Resultado del clasificador para la actividad seleccionada
   const [classification, setClassification] = useState<SessionClassification | null>(null);
+  // Distribución global de tipos de entrenamiento (Sweet Spot, VO2max, etc.)
   const [distribution, setDistribution] = useState<TrainingDistribution | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Listado de actividades recientes para el selector
   const [activities, setActivities] = useState<any[]>([]);
   const [selectedActivity, setSelectedActivity] = useState(activityId);
 
@@ -71,6 +80,7 @@ export default function SessionClassifierScreen({
     }
   }, []);
 
+  // Cargar actividades recientes para el selector de sesión
   const fetchActivities = async () => {
     try {
       const res = await fetch(
@@ -96,6 +106,7 @@ export default function SessionClassifierScreen({
     }
   };
 
+  // Clasificar la sesión de una actividad concreta
   const fetchClassification = async (id: string) => {
     try {
       setLoading(true);
@@ -113,6 +124,7 @@ export default function SessionClassifierScreen({
     }
   };
 
+  // Calcular distribución global del tipo de entrenamientos
   const fetchDistribution = async () => {
     try {
       const res = await fetch(
@@ -377,10 +389,10 @@ export default function SessionClassifierScreen({
                   {[
                     { name: 'Sweet Spot', value: distribution.sweetSpot, color: '#8B4513' },
                     { name: 'VO2max', value: distribution.VO2max, color: '#FF6B6B' },
-                    { name: 'Easy', value: distribution.easy, color: '#51CF66' },
-                    { name: 'Anaerobic', value: distribution.anaerobic, color: '#FF1744' },
-                    { name: 'Endurance', value: distribution.endurance, color: '#00BCD4' },
-                    { name: 'Other', value: distribution.other, color: colors.border },
+                    { name: 'Fácil', value: distribution.easy, color: '#51CF66' },
+                    { name: 'Anaeróbico', value: distribution.anaerobic, color: '#FF1744' },
+                    { name: 'Resistencia', value: distribution.endurance, color: '#00BCD4' },
+                    { name: 'Otros', value: distribution.other, color: colors.border },
                   ].map((type) => {
                     if (type.value === 0) return null;
                     return (
@@ -402,7 +414,7 @@ export default function SessionClassifierScreen({
 
                 {distribution.polarization && (
                   <View style={styles.polarizationBox}>
-                    <Text style={styles.polarizationTitle}>⚖️ Polarization Analysis</Text>
+                    <Text style={styles.polarizationTitle}>⚖️ Análisis de Polarización</Text>
                     <Text
                       style={[
                         styles.polarizationStatus,
@@ -420,25 +432,25 @@ export default function SessionClassifierScreen({
                     </Text>
 
                     <View style={styles.polarizationInfo}>
-                      <Text style={styles.polarizationInfoTitle}>What is Polarization?</Text>
+                      <Text style={styles.polarizationInfoTitle}>¿Qué es la Polarización?</Text>
                       <Text style={styles.polarizationInfoText}>
-                        Elite cyclists train following the 80/20 rule:{'\n'}
-                        80% at or below Zone 2 (easy){'\n'}
-                        20% at or above Zone 4 (hard)
+                        Los ciclistas élite entrenan según la regla 80/20:{'\n'}
+                        80% en Zona 2 o inferior (suave){'\n'}
+                        20% en Zona 4 o superior (intenso)
                       </Text>
                     </View>
                   </View>
                 )}
 
                 <View style={styles.sessionTypeExplainer}>
-                  <Text style={styles.explainerTitle}>📚 Session Types Explained:</Text>
+                  <Text style={styles.explainerTitle}>📚 Tipos de Sesión:</Text>
 
                   <View style={styles.explainerItem}>
                     <Text style={[styles.explainerEmoji, { color: '#51CF66' }]}>🚴</Text>
                     <View style={styles.explainerContent}>
-                      <Text style={styles.explainerName}>Easy Rides</Text>
+                      <Text style={styles.explainerName}>Salidas Fáciles</Text>
                       <Text style={styles.explainerDesc}>
-                        Zone 1-2: Base building, recovery, low stress
+                        Zona 1-2: Base aeróbica, recuperación, bajo estrés
                       </Text>
                     </View>
                   </View>
@@ -446,9 +458,9 @@ export default function SessionClassifierScreen({
                   <View style={styles.explainerItem}>
                     <Text style={[styles.explainerEmoji, { color: '#00BCD4' }]}>📈</Text>
                     <View style={styles.explainerContent}>
-                      <Text style={styles.explainerName}>Endurance</Text>
+                      <Text style={styles.explainerName}>Resistencia</Text>
                       <Text style={styles.explainerDesc}>
-                        Zone 2-3: Long duration, fat adaptation
+                        Zona 2-3: Larga duración, adaptación a grasas
                       </Text>
                     </View>
                   </View>
@@ -458,7 +470,7 @@ export default function SessionClassifierScreen({
                     <View style={styles.explainerContent}>
                       <Text style={styles.explainerName}>Sweet Spot</Text>
                       <Text style={styles.explainerDesc}>
-                        Zone 3-4: Sustained high power, builds fitness
+                        Zona 3-4: Potencia sostenida alta, mejora la forma física
                       </Text>
                     </View>
                   </View>
@@ -468,7 +480,7 @@ export default function SessionClassifierScreen({
                     <View style={styles.explainerContent}>
                       <Text style={styles.explainerName}>VO2max</Text>
                       <Text style={styles.explainerDesc}>
-                        Zone 4-5a: High intensity intervals, aerobic power
+                        Zona 4-5a: Intervalos de alta intensidad, potencia aeróbica
                       </Text>
                     </View>
                   </View>
@@ -476,9 +488,9 @@ export default function SessionClassifierScreen({
                   <View style={styles.explainerItem}>
                     <Text style={[styles.explainerEmoji, { color: '#FF1744' }]}>🔥</Text>
                     <View style={styles.explainerContent}>
-                      <Text style={styles.explainerName}>Anaerobic</Text>
+                      <Text style={styles.explainerName}>Anaeróbico</Text>
                       <Text style={styles.explainerDesc}>
-                        Zone 5b-6: 1-10min maximal efforts, sprint events
+                        Zona 5b-6: Esfuerzos máximos 1-10min, esprints
                       </Text>
                     </View>
                   </View>
