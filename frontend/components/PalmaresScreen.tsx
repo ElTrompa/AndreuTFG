@@ -252,11 +252,14 @@ export default function PalmaresScreen({ jwt, apiBase = 'http://localhost:3001' 
 
     return (
       <ScrollView style={styles.scrollContent}>
-        {data.map((achievement, index) => (
-          <View key={`achievement-${achievement.segment_id}-${index}`}>
-            {renderAchievementCard(achievement, activeTab !== 'koms', index)}
-          </View>
-        ))}
+        {data.map((achievement, index) => {
+          const vp: any = { key: `achievement-${achievement.segment_id}-${index}` };
+          return (
+            <View {...vp}>
+              {renderAchievementCard(achievement, activeTab !== 'koms', index)}
+            </View>
+          );
+        })}
       </ScrollView>
     );
   };

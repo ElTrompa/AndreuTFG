@@ -178,9 +178,9 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
         <View style={styles.catBody}>
           {list.map(d=>{
             const r = rows.find(rr=>rr.d===d)!;
+            const rowProps: any = { key: d };
             return (
-              <React.Fragment key={d}>
-                <View style={styles.row}>
+              <View {...rowProps} style={styles.row}>
                   <View style={styles.rowLeft}>
                     <Text style={styles.duration}>{r.d}</Text>
                     <Text style={styles.wval}>{Math.round(r.v)} W{r.wkg !== undefined ? ` · ${r.wkg} W/kg` : ''}</Text>
@@ -197,7 +197,6 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
                     </View>
                   </View>
                 </View>
-              </React.Fragment>
             );
           })}
         </View>
@@ -217,20 +216,18 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
         
         <View style={{marginTop: 12}}>
           <Text style={styles.profileSubtitle}>💪 Fortalezas:</Text>
-          {cyclistProfile.strengths.map((s, i) => (
-            <React.Fragment key={i}>
-              <Text style={styles.profileListItem}>• {s}</Text>
-            </React.Fragment>
-          ))}
+          {cyclistProfile.strengths.map((s, i) => {
+            const p: any = { key: i };
+            return <Text {...p} style={styles.profileListItem}>• {s}</Text>;
+          })}
         </View>
         
         <View style={{marginTop: 8}}>
           <Text style={styles.profileSubtitle}>🎯 A mejorar:</Text>
-          {cyclistProfile.improvements.map((s, i) => (
-            <React.Fragment key={i}>
-              <Text style={styles.profileListItem}>• {s}</Text>
-            </React.Fragment>
-          ))}
+          {cyclistProfile.improvements.map((s, i) => {
+            const p: any = { key: i };
+            return <Text {...p} style={styles.profileListItem}>• {s}</Text>;
+          })}
         </View>
       </View>
 

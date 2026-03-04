@@ -132,7 +132,8 @@ export default function HexPowerChart({ values, size=320, weightKg }: Props){
           {/* circular radial lines */}
           {points.map((pt, i)=>{
             const p = polarToCartesian(cx, cy, radius, pt.angle);
-            return <Line key={`line-${i}`} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#e6eef2" strokeWidth={0.6} />;
+            const lineProps: any = { key: `line-${i}` };
+            return <Line {...lineProps} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#e6eef2" strokeWidth={0.6} />;
           })}
 
           {/* concentric rings */}
@@ -142,7 +143,8 @@ export default function HexPowerChart({ values, size=320, weightKg }: Props){
               const p = polarToCartesian(cx, cy, radius * rFrac, ang);
               return `${p.x},${p.y}`;
             }).join(' ');
-            return <Polygon key={`ring-${ri}`} points={pts} fill="none" stroke="#dbeef3" strokeWidth={0.8} strokeDasharray={[3,4]} />;
+            const ringProps: any = { key: `ring-${ri}` };
+            return <Polygon {...ringProps} points={pts} fill="none" stroke="#dbeef3" strokeWidth={0.8} strokeDasharray={[3,4]} />;
           })}
 
           {/* data fill + outline */}
