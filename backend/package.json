@@ -9,6 +9,7 @@
     "migrate": "node scripts/migrate.js"
   },
   "dependencies": {
+    "@expo/ngrok": "^4.0.0",
     "axios": "^1.13.5",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
