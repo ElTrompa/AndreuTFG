@@ -1,350 +1,403 @@
 # 🚴‍♂️ RideMetrics — Aplicación de Análisis de Entrenamiento Ciclista
 
+> Proyecto de Fin de Grado — DAM2 · Florida Campus Alzira · Andreu
+
 ## 📌 Descripción del proyecto
 
-**RideMetrics** es una aplicación móvil multiplataforma orientada al análisis y mejora del rendimiento ciclista, integrada con la API de Strava. Proporciona analítica avanzada de ciclismo profesional que va más allá de lo que ofrece Strava, incluyendo:
+**RideMetrics** es una aplicación móvil multiplataforma integrada con la API de Strava que ofrece analítica de ciclismo de nivel profesional de forma gratuita: métricas que plataformas como TrainingPeaks o WKO5 ofrecen únicamente bajo suscripción.
 
-- 🔥 **Analítica Avanzada**: TSS, TRIMP, sustrato energético (grasas/carbohidratos), VO2, eficiencia aeróbica
-- 📊 **Performance Management Chart (PMC)**: Seguimiento de forma (CTL), fatiga (ATL) y frescura (TSB)
-- ⚡ **Sistema de Niveles**: 10 niveles realistas con umbrales de potencia absolutos por duración
-- 🏔️ **Análisis de Perfil**: Clasificación automática en Sprinter, Escalador o Rodador
-- 📈 **Curva de Potencia**: Visualización hexagonal con potencias máximas en 13 duraciones
-- 🚦 **Rate Limiting Inteligente**: Sistema robusto para respetar límites de API de Strava con queue automático y backoff exponencial
-
-Este proyecto se desarrolla como parte del Proyecto Intermodular 2 del ciclo formativo de grado superior en Desarrollo de Aplicaciones Multiplataforma (DAM) en Florida Campus Alzira. Este es un proyecto de fin de grado con el nombre **RideMetrics**, desarrollado por Andreu.
+El proyecto cubre un backend REST completo (Node.js/Express + MySQL) y una app móvil (React Native/Expo/TypeScript) con más de 15 pantallas, 6 rutas de API, 12 servicios backend y un sistema de búsqueda de rutas por municipios.
 
 ## 🎯 Objetivos
 
-- Integrar datos reales de entrenamientos mediante Strava.
+- Integrar datos reales de entrenamientos mediante Strava OAuth 2.0.
 - Ofrecer analítica avanzada nivel TrainingPeaks/INSCYD de forma gratuita.
+- Gestionar los límites de la API de Strava con un sistema de rate limiting robusto.
 - Visualizar métricas deportivas con precisión científica.
 - Analizar forma física, fatiga y carga de entrenamiento (PMC).
 - Generar proyecciones de rendimiento a medio y largo plazo.
 - Proporcionar recomendaciones de entrenamiento personalizadas.
-- Aplicar arquitectura backend + frontend real.
-- Trabajar bajo metodología SCRUM.
-- Desplegar una aplicación completa en entorno cloud.
-- Documentar el proyecto de forma profesional.
+- Aplicar arquitectura backend + frontend real con despliegue dockerizado.
 
 ## 🧠 Motivación
 
 Muchas plataformas actuales de análisis deportivo ofrecen métricas avanzadas solo bajo suscripción:
 
-- **Strava Premium**: €80/año
-- **TrainingPeaks**: €120/año  
-- **INSCYD**: €500/año
+| Plataforma | Coste |
+|---|---|
+| Strava Premium | ~€80/año |
+| TrainingPeaks | ~€120/año |
+| INSCYD | ~€500/año |
 
-Este proyecto busca ofrecer una alternativa:
+RideMetrics proporciona esas mismas métricas de forma **gratuita**, **open-source** y **multiplataforma**.
 
-- ✅ **Gratuita**
-- ✅ **Analítica profesional** (TSS, PMC, sustrato energético)
-- ✅ **Intuitiva** y multiplataforma
-- ✅ **Orientada a la mejora** continua del deportista
-- ✅ **Basada en ciencia** (estudios de Coggan, Banister)
+---
 
-## 🚀 Características Principales
+## 🚀 Características Implementadas
+
+### 🔐 Autenticación OAuth 2.0
+
+- Flujo OAuth 2.0 completo con Strava (polling de sesión desde la app móvil).
+- Tokens almacenados en MySQL con renovación automática en background.
+- JWT firmado devuelto al cliente para autenticar todas las llamadas.
+
+---
 
 ### 📊 Performance Management Chart (PMC)
 
-Sistema profesional de seguimiento de rendimiento:
+Sistema profesional de seguimiento de carga de entrenamiento:
 
-- **CTL (Chronic Training Load)**: Forma a largo plazo (42 días)
-- **ATL (Acute Training Load)**: Fatiga a corto plazo (7 días)
-- **TSB (Training Stress Balance)**: Frescura (CTL - ATL)
-- **Vistas**: Diaria, Semanal, Mensual
-- **Recomendaciones**: Automáticas basadas en estado actual
+| Métrica | Descripción | Constante de tiempo |
+|---|---|---|
+| **CTL** | Chronic Training Load (forma) | 42 días |
+| **ATL** | Acute Training Load (fatiga) | 7 días |
+| **TSB** | Training Stress Balance (frescura) | CTL − ATL |
 
-Documentación completa: [`PMC_SYSTEM.md`](backend/PMC_SYSTEM.md)
+- Vistas diaria, semanal y mensual.
+- PMC Forecasting con 4 escenarios (descanso / mantenimiento / moderado / intenso).
+- Recomendaciones automáticas según estado actual.
 
-### 🔥 Analítica Avanzada
+Documentación: [`backend/PMC_SYSTEM.md`](backend/PMC_SYSTEM.md)
 
-Para cada actividad se calcula:
+---
 
-#### 1. Gasto Energético
-- Calorías metabólicas reales (kJ / eficiencia)
-- Ajuste por eficiencia mecánica personalizada
+### 🔥 Analítica Avanzada por Actividad
 
-#### 2. Sustrato Energético
-- **% Grasas vs Carbohidratos** con precisión
-- **Gramos exactos** de CHO y grasa oxidados
-- Método por IF (Intensity Factor) o por %FC reserva
-- Curvas de intensidad fisiológicas
+Para cada actividad se calculan automáticamente:
 
-#### 3. Carga Interna
-- **TSS** (Training Stress Score): No disponible en Strava
-- **TRIMP** (Bannister): Carga fisiológica real
-- Personalizado con FC max/rest y FTP
+- **Gasto energético**: calorías metabólicas reales (kJ / eficiencia).
+- **Sustrato energético**: % grasas vs carbohidratos, gramos exactos de CHO y grasa oxidados.
+- **TSS** (Training Stress Score) y **TRIMP** (Banister).
+- **VO2 estimado** durante la sesión y % VO2max.
+- **Efficiency Factor (EF)** y **Aerobic Decoupling**.
+- **FatMax**: análisis de tiempo en zona óptima de oxidación de grasa.
+- **W/kg** promedio y normalizado.
+- **Depleción de glucógeno**: gramos usados y % de reservas.
 
-#### 4. Consumo de Oxígeno
-- **VO2 estimado** durante sesión (ml/kg/min)
-- **% VO2max** usado
-- Tiempo en zona aeróbica
+Documentación: [`backend/ADVANCED_ANALYTICS.md`](backend/ADVANCED_ANALYTICS.md)
 
-#### 5. Eficiencia Aeróbica
-- **EF** (Efficiency Factor): NP / FC media
-- **Aerobic Decoupling**: Detección de fatiga (>5% = fatiga)
-- Comparación primera vs segunda mitad
+---
 
-#### 6. FatMax
-- Zona de máxima oxidación de grasa (60-65% VO2max)
-- Análisis de tiempo en zona óptima
+### ⚡ Curva de Potencia y Sistema de Niveles
 
-#### 7. Métricas Relativas
-- **W/kg promedio y normalizado**
-- Clave para rendimiento en subida
-
-#### 8. Depleción de Glucógeno
-- Gramos de glucógeno usados
-- % de reservas musculares
-- Estrategia de recuperación
-
-Documentación completa: [`ADVANCED_ANALYTICS.md`](backend/ADVANCED_ANALYTICS.md)
-
-### � Características Avanzadas Profesionales
-
-RideMetrics ahora incluye **18 sistemas avanzados** de nivel profesional que rivalizan con TrainingPeaks, INSCYD y WKO5:
-
-#### 🔮 Predicción y Modelado
-- **Predicción automática de FTP**: Estimación desde curva de potencia (métodos 20min/60min)
-- **Critical Power Model**: Modelo 2-parámetros (CP + W') con cálculo de tiempo hasta agotamiento
-- **PMC Forecasting**: Proyecciones de forma con 4 escenarios predefinidos (descanso/mantenimiento/moderado/intenso)
-
-#### 🤖 Coach Inteligente
-- **Recomendaciones diarias**: Sugerencias automáticas basadas en TSB y actividad reciente
-- **Detección de sobreentrenamiento**: Sistema multiparamétrico (TSB, EF, decoupling, HRV)
-- **Planes semanales personalizados**: Generación automática para 4 objetivos (FTP, VO2max, resistencia, sprint)
-
-#### 📊 Métricas Avanzadas
-- **Variability Index (VI)**: Análisis de pacing y regularidad
-- **Pacing Score**: Detección de estrategia (negative split, positive split, even pacing)
-- **Peak Power Records**: Tracking automático de récords en 13 duraciones
-- **Efficiency Trends**: Regresión lineal de Factor de Eficiencia a 90 días
-- **Aerobic Decoupling**: Análisis de acoplamiento aeróbico
-
-#### 💓 HRV y Recuperación
-- **HRV Tracking**: Sistema completo de seguimiento con baseline rolling 30 días
-- **Training Readiness**: Score combinado HRV + TSB (0-100)
-- **Anomaly Detection**: Detección de caídas súbitas de HRV
-
-#### ⛰️ Análisis de Terreno
-- **Detección automática de puertos**: Identificación de ascensos con categorización (HC, Cat1-4)
-- **W/kg en ascensos**: Cálculo de potencia relativa por puerto
-- **VAM (Vertical Ascent Meters)**: Velocidad de ascensión vertical
-- **Comparación histórica**: Rendimiento vs intentos previos
-
-#### 🏔️ Simulador de Puertos Famosos
-- **8 puertos icónicos**: Alpe d'Huez, Angliru, Mortirolo, Ventoux, Tourmalet, Zoncolan, Stelvio, Peyresourde
-- **Proyecciones realistas**: Simulación física basada en FTP/peso
-- **Comparación con records pro**: Tiempo estimado vs récords profesionales
-- **Recomendaciones inteligentes**: Puertos apropiados según perfil
-
-#### 🤖 Clasificador ML de Sesiones
-- **12 tipos de sesión**: Recovery, VO2max, Threshold, Sweet Spot, Endurance, Tempo, Climbing, Sprint, Easy, Race, Group Ride
-- **Análisis multiparamétrico**: IF, VI, duración, desnivel, patrones de potencia
-- **Distribución de entrenamiento**: Análisis de polarización (regla 80/20)
-- **Confianza del modelo**: Score 0.75-0.95 según características
-
-#### 🏆 Sistema de Gamificación
-- **32 achievements** en 6 categorías:
-  - **Power**: Club 250W/300W/350W, Escalador (4.0/4.5/5.0 W/kg)
-  - **Volume**: 1k/5k/10k km, Everest Virtual, 100k desnivel
-  - **Consistency**: Rachas de 7/30/100 días
-  - **Fitness**: 500/750 TSS semanal, CTL 70/100
-  - **Special**: Century/Double Century, 5h rides, 1000W sprints
-  - **Performance**: VI perfecto, negative splits, múltiples PRs
-- **Progreso en tiempo real**: Tracking hacia objetivos pendientes
-- **3 tiers**: Bronze, Silver, Gold
-
-**Documentación API:** [`backend/API_ADVANCED.md`](backend/API_ADVANCED.md)
-
-**Endpoints disponibles:**
-- `/advanced/*` - 9 endpoints de predicción, coaching y métricas
-- `/specialized/*` - 8 endpoints de HRV, terreno y puertos
-
-### �🚦 Rate Limiting (Gestión de límites API)
-
-Sistema robusto para gestionar los límites de la API de Strava (600 solicitudes por 15 minutos):
-
-- **Queue automático**: Todas las solicitudes se encolan automáticamente
-- **Espaciado inteligente**: Mínimo 150ms entre solicitudes
-- **Monitoreo en tiempo real**: Tracking de uso de cuota en cada respuesta
-- **Throttling automático**: Ralentiza solicitudes cuando se acerca al límite (>90% uso)
-- **Reintento con backoff exponencial**: Los errores 429 se reintatan automáticamente
-- **Endpoint de diagnóstico**: `/api/strava/rate-limit-status` para monitorear el estado
-
-Documentación completa: [`RATE_LIMITING.md`](backend/RATE_LIMITING.md)
-
-### ⚡ Sistema de Niveles Realista
-
-10 niveles con umbrales absolutos de potencia por duración:
+- **Curva de potencia** en **13 duraciones**: 5s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 20m, 30m, 45m, 1h.
+- Visualización **hexagonal** (componente `HexPowerChart`).
+- **10 niveles** con umbrales absolutos de potencia por duración:
 
 | Nivel | Nombre | 5s | 1m | 1h |
-|-------|--------|----|----|-----|
-| 1 | Principiante | 500W | 220W | 85W |
-| 5 | Amateur Competitivo | 1200W | 480W | 245W |
-| 10 | Prof. World Tour | 2200W | 820W | 450W |
+|---|---|---|---|---|
+| 1 | Principiante | 500 W | 220 W | 85 W |
+| 5 | Amateur Competitivo | 1200 W | 480 W | 245 W |
+| 10 | Profesional World Tour | 2200 W | 820 W | 450 W |
 
-- **13 duraciones** (5s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 20m, 30m, 45m, 1h)
-- **Progreso preciso** hasta siguiente nivel
-- **No relativo** al máximo personal
+- Progreso preciso hasta el siguiente nivel (no relativo al máximo personal).
+
+---
 
 ### 🏔️ Análisis de Perfil Ciclista
 
-Clasificación automática basada en distribución de potencias:
+Clasificación automática basada en la distribución de potencias:
 
-- **⚡ Sprinter**: Explosividad en corta duración (5s-15s)
-- **🏔️ Escalador**: Resistencia en media-larga duración (30m-1h)
-- **🚴 Rodador**: Equilibrio en todas las duraciones (5m-20m)
+| Perfil | Duración clave |
+|---|---|
+| ⚡ Sprinter | 5 s – 15 s |
+| 🏔️ Escalador | 30 min – 1 h |
+| 🚴 Rodador | 5 min – 20 min |
 
-Incluye:
-- Descripción del perfil
-- Fortalezas principales
-- Áreas de mejora
-- Emoji identificativo
+Incluye descripción del perfil, fortalezas principales, áreas de mejora y emoji identificativo.
 
-### 📈 Curva de Potencia
+---
 
-Visualización hexagonal de potencias máximas en 13 duraciones:
+### 🔮 Predicciones y Modelos
 
-- Normalización independiente por duración
-- Tooltip mejorado con nivel actual
-- Contraste visual optimizado
-- Indicador "¡Nivel máximo! 🏆"
+- **Predicción automática de FTP** desde la curva de potencia (métodos 20 min / 60 min).
+- **Critical Power Model** (CP + W') con cálculo de tiempo hasta agotamiento.
+- Actualización automática del FTP estimado en el perfil del atleta.
 
-### 🎯 Zonas de Potencia Personalizadas
+---
 
-Basadas en FTP del perfil:
+### 🤖 Coach Inteligente
 
-- **Z1**: < 55% FTP (Recuperación)
-- **Z2**: 55-75% FTP (Resistencia)
-- **Z3**: 75-90% FTP (Tempo)
-- **Z4**: 90-105% FTP (Umbral)
-- **Z5**: > 105% FTP (VO2max)
+- **Recomendaciones diarias** basadas en TSB y actividad reciente.
+- **Detección de sobreentrenamiento** (TSB, EF, decoupling, HRV).
+- **Planes semanales personalizados** para 4 objetivos: FTP, VO2max, resistencia, sprint.
 
-Gráfico de tiempo en cada zona por actividad.
+---
 
-### 💾 Perfil Personalizado
+### 💓 HRV y Recuperación
 
-Configuración completa del atleta:
+- **HRV Tracking**: baseline rolling de 30 días.
+- **Training Readiness Score** (0-100): combina HRV + TSB.
+- **Anomaly Detection**: detección de caídas súbitas de HRV.
 
-- **FTP** (Watts)
-- **Peso** (kg)
-- **FC máxima** y **FC reposo** (bpm)
-- **VO2max** (ml/kg/min)
-- **Altura** (cm)
+---
 
-Todos los cálculos se personalizan automáticamente.
+### ⛰️ Análisis de Terreno y Puertos
 
-## 🏗 Arquitectura e Implementación
+- **Detección automática de puertos**: identificación de ascensos con categorización (HC, Cat1-4).
+- **W/kg en ascensos** y **VAM** (velocidad de ascensión vertical).
+- **Comparación histórica** vs intentos previos.
+- **Simulador de 8 puertos icónicos**: Alpe d'Huez, Angliru, Mortirolo, Ventoux, Tourmalet, Zoncolan, Stelvio, Peyresourde.
+  - Proyecciones físicas basadas en FTP / peso.
+  - Comparación con récords profesionales.
 
-### Componentes Clave
+---
 
-- **Rate Limiter** (`src/services/rateLimit.js`): Sistema centralizado de gestión de límites API
-- **Strava Service** (`src/services/strava.js`): Integración completa con API de Strava a través del rate limiter
-- **Analytics Service** (`src/services/analytics.js`): Motor de cálculos avanzados de rendimiento
-- **PMC Service** (`src/services/pmc.js`): Sistema de seguimiento de carga y rendimiento
-- **Rutas API**: Endpoints RESTful para acceso de aplicación cliente
+### 🤖 Clasificador de Sesiones
 
-## 🎓 Alcance del proyecto (contexto académico)
+Clasifica automáticamente cada actividad en uno de **12 tipos**:
 
-Este proyecto cumple los requisitos técnicos del Proyecto Intermodular DAM:
+`Recovery` · `VO2max` · `Threshold` · `Sweet Spot` · `Endurance` · `Tempo` · `Climbing` · `Sprint` · `Easy` · `Race` · `Group Ride` · `Custom`
 
-### Backend
+- Análisis multiparamétrico: IF, VI, duración, desnivel, patrones de potencia.
+- Distribución de entrenamiento y análisis de polarización (regla 80/20).
+- Score de confianza del modelo (0.75–0.95).
 
-- API REST propia con Express.js
-- Autenticación OAuth 2.0 con Strava
-- Operaciones CRUD de atletas y entrenamientos
-- Persistencia en base de datos MySQL
-- Gestión robusta de límites de API de terceros
-- Configuración por archivo `.env`
-- Despliegue en la nube (listo para Docker)
+---
+
+### 🏆 Sistema de Gamificación (32 Achievements)
+
+Organizados en 6 categorías y 3 niveles (Bronze / Silver / Gold):
+
+| Categoría | Ejemplos |
+|---|---|
+| **Power** | Club 250W/300W/350W · Escalador 4.0/4.5/5.0 W/kg |
+| **Volume** | 1k/5k/10k km · Everest Virtual · 100k desnivel |
+| **Consistency** | Rachas 7/30/100 días |
+| **Fitness** | 500/750 TSS semanal · CTL 70/100 |
+| **Special** | Century/Double Century · rides de 5h · sprints de 1000W |
+| **Performance** | VI perfecto · negative splits · múltiples PRs |
+
+---
+
+### 📍 Búsqueda de Rutas por Municipios
+
+- Extracción automática de municipios a partir del track GPS de cada actividad.
+- Búsqueda de todas las actividades que pasan por un municipio concreto.
+- Mapa interactivo de municipios visitados (`RoutesSearchScreen`).
+- Persistencia en tablas `towns` y `activity_towns`.
+
+Documentación: [`TOWNS_FEATURE.md`](TOWNS_FEATURE.md)
+
+---
+
+### 🚦 Rate Limiting Inteligente
+
+Sistema robusto para respetar los límites de la API de Strava (600 req / 15 min):
+
+- **Queue automático**: todas las solicitudes se encolan antes de ejecutarse.
+- **Espaciado mínimo**: 150 ms entre peticiones.
+- **Throttling automático**: ralentiza cuando el uso supera el 90%.
+- **Backoff exponencial** en errores 429.
+- **Endpoint de diagnóstico**: `GET /strava/rate-limit-status`.
+
+Documentación: [`backend/RATE_LIMITING.md`](backend/RATE_LIMITING.md)
+
+---
+
+## 🛠 Stack Tecnológico
 
 ### Frontend
 
-- Aplicación móvil desarrollada con React Native
-- Interfaz adaptable a móvil y tablet
-- TypeScript para type safety
-- Diseño previo con Figma
-- Integración completa con backend API
+| Tecnología | Versión |
+|---|---|
+| React Native | 0.81.5 |
+| React | 19.1.0 |
+| Expo | 54 |
+| TypeScript | 5.9 |
+| react-native-svg | 15.12 |
+| react-native-maps | 1.20 |
+| AsyncStorage | 2.2 |
 
-### Requisitos comunes
+### Backend
 
-- Uso de GitHub
-- Metodología SCRUM
-- Gestión del proyecto con Trello
-- Desarrollo en inglés (app)
-- Entorno dockerizado
+| Tecnología | Versión |
+|---|---|
+| Node.js | ≥ 18 |
+| Express | 4.18 |
+| mysql2 | 3.3 |
+| jsonwebtoken | 9.0 |
+| axios | 1.13 |
 
-## 🛠 Tecnologías utilizadas
+### Infraestructura
 
-**Frontend**
+| Herramienta | Uso |
+|---|---|
+| MySQL 8.0 | Base de datos principal |
+| Docker + Compose | Entorno contenerizado |
+| Adminer | Administrador web de BD |
+| Strava API v3 | Fuente de datos de entrenamientos |
 
-- React Native
-- TypeScript
-- Expo / CLI
+---
 
-**Backend**
-
-- Node.js
-- Express.js
-- API REST
-
-**Base de datos**
-
-- MySQL
-
-**Infraestructura**
-
-- Docker
-- Docker Compose
-
-**APIs externas**
-
-- Strava API (OAuth 2.0)
-
-**Herramientas**
-
-- Git & GitHub
-- Trello
-- Figma
-
-## 🧩 Arquitectura
+## 🏗 Arquitectura
 
 ```
-[ App React Native ]
-        |
-[ Backend API REST ]
-        |
-[ Base de datos ] — [ Strava API ]
+┌─────────────────────────────────┐
+│    App React Native / Expo      │
+│  (TypeScript · 15+ pantallas)   │
+└────────────┬────────────────────┘
+             │ HTTP + JWT
+┌────────────▼────────────────────┐
+│   Backend API REST (Express)    │
+│   /auth  /strava  /profile      │
+│   /advanced  /specialized       │
+│   /towns                        │
+└──────┬───────────────┬──────────┘
+       │               │
+┌──────▼──────┐  ┌─────▼──────────┐
+│  MySQL 8.0  │  │   Strava API   │
+│  (Docker)   │  │   v3 (OAuth)   │
+└─────────────┘  └────────────────┘
 ```
 
-## 🚀 Funcionalidades Implementadas
+---
 
-**API Backend**
-- 🔐 Autenticación OAuth 2.0 con Strava
-- 📊 Endpoint de entrenamientos con sincronización
-- 🧮 Cálculos de analítica avanzada (TSS, TRIMP, sustrato energético)
-- 📈 Performance Management Chart (PMC) con CTL/ATL/TSB
-- ⚡ Sistema de niveles con umbrales por duración
-- 🏔️ Análisis automático de perfil ciclista
-- 📐 Curva de potencia en 13 duraciones
-- 🚦 Rate limiting robusto para API de Strava
-- 📍 Endpoint de diagnóstico de rate limits
+## 📂 Estructura del Proyecto
 
-**Frontend (React Native)**
-- 📱 Interfaz optimizada para móvil y tablet
-- 🔐 Login con Strava
-- 📊 Visualización de entrenamientos
-- 📈 Gráficas de progreso (semanal, mensual)
-- 🧮 Métricas de rendimiento detalladas
-- 📐 Curva de potencia hexagonal
-- 🎨 Diseño oscuro/claro
+```
+RideMetrics/
+├── frontend/                        # App React Native / Expo
+│   ├── components/
+│   │   ├── HomeScreen.tsx           # Panel principal
+│   │   ├── ActivitiesScreen.tsx     # Lista de actividades
+│   │   ├── ActivityDetailScreen.tsx # Detalle de actividad
+│   │   ├── AdvancedAnalyticsScreen.tsx
+│   │   ├── CoachingScreen.tsx       # Coach inteligente
+│   │   ├── HRVScreen.tsx            # Variabilidad FC
+│   │   ├── MetricasAvanzadasScreen.tsx
+│   │   ├── PalmaresScreen.tsx       # Achievements / KOMs
+│   │   ├── PotenciaScreen.tsx       # Curva de potencia
+│   │   ├── ProfileScreen.tsx        # Perfil del atleta
+│   │   ├── ProyeccionesScreen.tsx   # PMC + proyecciones
+│   │   ├── RoutesSearchScreen.tsx   # Búsqueda por municipios
+│   │   ├── SessionClassifierScreen.tsx
+│   │   ├── TerrainScreen.tsx        # Análisis de puertos
+│   │   ├── HexPowerChart.tsx        # Gráfico hexagonal
+│   │   ├── TimeInZoneChart.tsx      # Zonas de potencia
+│   │   ├── HamburgerMenu.tsx
+│   │   └── SafeView.tsx
+│   ├── services/
+│   │   └── cacheService.ts
+│   ├── App.tsx
+│   ├── theme.ts
+│   └── package.json
+│
+├── backend/                         # API REST Node.js / Express
+│   ├── src/
+│   │   ├── index.js                 # Entry point + init BD
+│   │   ├── db.js                    # Pool de conexiones MySQL
+│   │   ├── routes/
+│   │   │   ├── auth.js              # OAuth Strava
+│   │   │   ├── stravaApi.js         # Actividades, sync, rate-limit
+│   │   │   ├── profile.js           # Perfil del atleta
+│   │   │   ├── advanced.js          # Predicciones, coaching, métricas
+│   │   │   ├── specialized.js       # HRV, terreno, gamificación
+│   │   │   └── towns.js             # Búsqueda por municipios
+│   │   ├── services/
+│   │   │   ├── strava.js            # Cliente Strava con rate limiter
+│   │   │   ├── rateLimit.js         # ⭐ RateLimiter (queue + backoff)
+│   │   │   ├── analytics.js         # TSS, TRIMP, sustrato, VO2…
+│   │   │   ├── pmc.js               # CTL / ATL / TSB
+│   │   │   ├── predictions.js       # FTP estimado, Critical Power
+│   │   │   ├── coaching.js          # Recomendaciones diarias
+│   │   │   ├── advancedMetrics.js   # VI, Pacing, EF trends
+│   │   │   ├── classifier.js        # Clasificador de sesiones
+│   │   │   ├── gamification.js      # 32 achievements
+│   │   │   ├── hrv.js               # HRV tracking
+│   │   │   ├── terrain.js           # Detección de puertos
+│   │   │   ├── climbs.js            # Simulador de puertos famosos
+│   │   │   └── towns.js             # Extracción de municipios GPS
+│   │   └── models/
+│   │       ├── tokens.js            # Gestión tokens OAuth
+│   │       ├── profiles.js
+│   │       ├── powerCurves.js
+│   │       ├── loginSessions.js
+│   │       └── towns.js
+│   ├── db/
+│   │   └── schema.sql               # 9 tablas (athletes, profiles, towns…)
+│   ├── scripts/
+│   │   ├── migrate.js
+│   │   └── compute_power_for_all.js
+│   └── package.json
+│
+├── docker-compose.yml               # MySQL 8 (3307) + Adminer (8085)
+├── README.md
+└── INSTALLATION.md
+```
 
-**Visualización de Datos**
-- Hexágono de potencia por rangos (5s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 20m, 30m, 45m, 1h)
-- Gráficos de desempeño semanal/mensual
-- PMC con proyecciones de forma física
-- Zonas de intensidad personalizadas por FTP
+---
+
+## 🗄 Base de Datos
+
+| Tabla | Descripción |
+|---|---|
+| `athletes` | Tokens OAuth de cada atleta |
+| `login_sessions` | Sesiones de login temporales (polling) |
+| `profiles` | Peso, altura, FTP, VO2max, FC máx/rest |
+| `power_curves` | Curva de potencia cacheada por atleta |
+| `activities_cache` | Actividades con detalles cacheadas |
+| `achievements_cache` | Logros calculados (KOMs, podios…) |
+| `api_sync_log` | Control de última sincronización por endpoint |
+| `towns` | Municipios únicos extraídos de tracks GPS |
+| `activity_towns` | Relación N:M actividad ↔ municipio |
+
+---
+
+## 📡 API — Endpoints Principales
+
+### `/auth`
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/auth/strava` | Inicia el flujo OAuth |
+| GET | `/auth/callback` | Callback OAuth de Strava |
+| GET | `/auth/poll/:state` | Polling de sesión desde la app |
+
+### `/strava`
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/strava/activities` | Lista de actividades (con caché) |
+| GET | `/strava/activity/:id` | Detalle + streams de actividad |
+| GET | `/strava/rate-limit-status` | Estado del rate limiter |
+
+### `/profile`
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/profile` | Perfil del atleta |
+| PUT | `/profile` | Actualizar perfil (FTP, peso…) |
+
+### `/advanced`
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/advanced/pmc` | CTL / ATL / TSB histórico |
+| GET | `/advanced/power-curve` | Curva de potencia + niveles |
+| GET | `/advanced/profile` | Perfil ciclista (Sprinter/Escalador/Rodador) |
+| GET | `/advanced/analytics/:id` | Analítica avanzada de actividad |
+| GET | `/advanced/predictions` | FTP estimado + Critical Power |
+| GET | `/advanced/coaching` | Recomendaciones + plan semanal |
+| GET | `/advanced/metrics/:id` | VI, Pacing Score, EF |
+| GET | `/advanced/gamification` | Achievements del atleta |
+| GET | `/advanced/forecast` | Proyecciones PMC a futuro |
+
+### `/specialized`
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/specialized/hrv` | HRV tracking + readiness |
+| POST | `/specialized/hrv` | Registrar nueva medición HRV |
+| GET | `/specialized/terrain/:id` | Análisis de terreno y puertos |
+| GET | `/specialized/climbs` | Simulador de puertos famosos |
+| GET | `/specialized/classifier/:id` | Clasificación de sesión |
+| GET | `/specialized/palmares` | KOMs, top10, local legends |
+
+### `/towns`
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/towns/athlete` | Municipios visitados por el atleta |
+| GET | `/towns/search` | Búsqueda de municipios por nombre |
+| GET | `/towns/:town_id/activities` | Actividades en un municipio |
+| POST | `/towns/extract/:id` | Extraer municipios de una actividad |
+
+---
 
 ## 📦 Instalación
 
@@ -352,210 +405,116 @@ Este proyecto cumple los requisitos técnicos del Proyecto Intermodular DAM:
 
 - Node.js ≥ 18
 - Docker y Docker Compose
-- Cuenta de desarrollador en Strava
-- MySQL ≥ 8.0 (o usar Docker)
+- Cuenta de desarrollador en Strava (Client ID + Secret)
 
-### Instalación local
+### Clonar el repositorio
 
 ```bash
 git clone https://github.com/usuario/RideMetrics.git
 cd RideMetrics
 ```
 
-**Backend**
+### 🐳 Con Docker (recomendado)
+
+Levanta MySQL 8 y Adminer automáticamente:
+
+```bash
+docker-compose up -d
+```
+
+- MySQL disponible en `localhost:3307`
+- Adminer disponible en `http://localhost:8085`
+
+### Backend
 
 ```bash
 cd backend
 npm install
-npm start          # Inicia en puerto 3000
-# o para desarrollo con reinicio automático:
-npm run dev
+cp .env.example .env   # Editar con tus credenciales
+npm run dev            # Nodemon con auto-reload
+# o en producción:
+npm start
 ```
 
-**Frontend**
+### Frontend
 
 ```bash
 cd frontend
 npm install
-npm start          # Expo server
+npm start              # Expo Dev Server
 ```
 
-### Verificar Rate Limiting
+---
 
-Una vez el backend está corriendo:
-
-```bash
-curl http://localhost:3000/api/strava/rate-limit-status
-```
-
-Deberías ver algo como:
-```json
-{
-  "requestsUsed": 0,
-  "requestsLimit": 600,
-  "requestsRemaining": 600,
-  "percentageUsed": 0,
-  "queueLength": 0,
-  "message": "OK: API usage is healthy"
-}
-```
-
-### 🐳 Instalación con Docker
-
-```bash
-docker-compose up --build
-```
-
-## 🔑 Configuración
-
-Crear un archivo `.env` en la carpeta `backend` con las siguientes variables (ejemplo):
+## 🔑 Configuración — `.env` (backend)
 
 ```env
 # Strava OAuth
-STRAVA_CLIENT_ID=xxxx
-STRAVA_CLIENT_SECRET=xxxx
+STRAVA_CLIENT_ID=tu_client_id
+STRAVA_CLIENT_SECRET=tu_client_secret
 STRAVA_REDIRECT_URI=http://localhost:3000/auth/callback
 
-# JWT para autenticación
-JWT_SECRET=supersecret-cambiar-en-produccion
+# JWT
+JWT_SECRET=cambia-esto-en-produccion
 
 # Base de datos MySQL
 DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=password
-DB_NAME=ridemetrics
+DB_PORT=3307
+DB_USER=tfgandreu
+DB_PASSWORD=tfgandreu_pass
+DB_NAME=tfgandreu
 
-# Modo aplicación
+# Entorno
 NODE_ENV=development
 PORT=3000
 ```
 
-### Rate Limiting (sintonizable)
+> Si usas Docker Compose, los valores de `DB_*` ya coinciden con los del `docker-compose.yml`.
 
-En `src/services/strava.js` puedes ajustar los parámetros del Rate Limiter:
+---
 
-```javascript
-const rateLimiter = new RateLimiter({
-  requestsPerWindow: 600,        // Límite de Strava
-  windowMs: 15 * 60 * 1000,      // Ventana de 15 minutos
-  minDelayMs: 150                 // Retraso mínimo entre solicitudes
-});
-```
+## 🎨 Paleta de Colores — RideMetrics
 
-## 📚 Uso
+| Rol | Nombre | Hex |
+|---|---|---|
+| Primario | Electric Blue | `#1E88E5` |
+| Secundario | Performance Green | `#2ECC71` |
+| Énfasis | Power Orange | `#F39C12` |
+| Fondo claro | — | `#F6F8FA` |
+| Texto principal | — | `#1F2933` |
+| Fondo oscuro | — | `#0F172A` |
+| Tarjeta oscura | — | `#1E293B` |
 
-1. Iniciar la aplicación.
-2. Iniciar sesión con Strava.
-3. Autorizar el acceso a los entrenamientos.
-4. Consultar estadísticas y proyecciones desde el panel principal.
+---
 
-## 📂 Estructura del proyecto
+## 📚 Documentación Interna
 
-```
-RideMetrics/
-├── frontend/                    # App React Native/Expo
-│   ├── components/
-│   ├── assets/
-│   ├── App.tsx
-│   ├── package.json
-│   └── tsconfig.json
-├── backend/                     # API REST Node.js/Express
-│   ├── src/
-│   │   ├── models/             # Modelos de BD
-│   │   ├── routes/             # Endpoints API
-│   │   ├── services/           # Lógica de negocio
-│   │   │   ├── strava.js       # Integración Strava
-│   │   │   ├── rateLimit.js    # ⭐ Rate Limiter
-│   │   │   ├── analytics.js    # Análisis avanzado
-│   │   │   └── pmc.js          # Performance Management
-│   │   ├── db.js
-│   │   └── index.js
-│   ├── db/
-│   │   └── schema.sql
-│   ├── RATE_LIMITING.md        # 📖 Documentación Rate Limiting
-│   ├── ADVANCED_ANALYTICS.md
-│   ├── PMC_SYSTEM.md
-│   ├── package.json
-│   └── .env
-├── docker-compose.yml
-├── README.md
-├── INSTALLATION.md
-└── .gitignore
-```
+| Archivo | Contenido |
+|---|---|
+| [`backend/PMC_SYSTEM.md`](backend/PMC_SYSTEM.md) | Performance Management Chart |
+| [`backend/ADVANCED_ANALYTICS.md`](backend/ADVANCED_ANALYTICS.md) | Cálculos de analítica avanzada |
+| [`backend/RATE_LIMITING.md`](backend/RATE_LIMITING.md) | Gestión de límites API Strava |
+| [`backend/API_ADVANCED.md`](backend/API_ADVANCED.md) | Referencia completa de endpoints avanzados |
+| [`TOWNS_FEATURE.md`](TOWNS_FEATURE.md) | Sistema de búsqueda por municipios |
+| [`INSTALLATION.md`](INSTALLATION.md) | Guía detallada de instalación |
 
-## 🧪 Testing
-
-```bash
-npm test
-```
-
-(Opcional: Jest / Detox)
+---
 
 ## 🧭 Metodología
 
-- Metodología SCRUM
-- Gestión de tareas con Trello
-- Control de versiones con GitHub
-- Desarrollo iterativo por sprints
+- **SCRUM** con sprints iterativos.
+- Control de versiones con **GitHub**.
+- Gestión de tareas con **Trello**.
+- Maquetas de UI con **Figma**.
 
-## 📚 Documentación Principal
+---
 
-- **[RATE_LIMITING.md](backend/RATE_LIMITING.md)** — Gestión de límites API de Strava
-- **[ADVANCED_ANALYTICS.md](backend/ADVANCED_ANALYTICS.md)** — Cálculos de analítica avanzada
-- **[PMC_SYSTEM.md](backend/PMC_SYSTEM.md)** — Performance Management Chart
-- **[INSTALLATION.md](INSTALLATION.md)** — Guía detallada de instalación
+## 🎓 Contexto Académico
 
-## 🎨 Paleta principal — RideMetrics / Cycling Performance
+Este proyecto cumple los requisitos del **Proyecto Intermodular 2** del ciclo formativo de grado superior en **Desarrollo de Aplicaciones Multiplataforma (DAM)** en Florida Campus Alzira.
 
-### 🔵 Color primario (acción / marca)
-
-- Nombre: Electric Blue
-- Hex: `#1E88E5`
-- Uso: Botones principales, enlaces, acentos activos
-
-### 🟢 Color secundario (rendimiento / salud)
-
-- Nombre: Performance Green
-- Hex: `#2ECC71`
-- Uso: Métricas positivas, progreso, estados óptimos
-
-### 🟠 Color de énfasis (esfuerzo / intensidad)
-
-- Nombre: Power Orange
-- Hex: `#F39C12`
-- Uso: Zonas de esfuerzo, alertas suaves, picos de potencia
-
-### 🖤 Neutrales (UI limpia tipo dashboard deportivo)
-
-- Fondo claro: `#F6F8FA`
-- Tarjetas: `#FFFFFF`
-- Texto principal: `#1F2933`
-- Texto secundario: `#6B7280`
-- Bordes/divisores: `#E5E7EB`
-
-### 🚦 Semánticos (estados)
-
-- Éxito: `#2ECC71`
-- Advertencia: `#F39C12`
-- Error: `#E74C3C`
-- Info: `#1E88E5`
-
-### 🌙 Modo oscuro (opcional recomendado)
-
-- Fondo principal: `#0F172A`
-- Tarjetas: `#1E293B`
-- Texto principal: `#F8FAFC`
-- Texto secundario: `#94A3B8`
-- Primario: `#38BDF8`
-- Secundario: `#4ADE80`
-
-## 📈 Roadmap
-
-- Autenticación Strava
-- Visualización de entrenamientos
-- Análisis de carga semanal
-- Proyecciones de rendimiento
-- Mejora UX/UI
-- Despliegue cloud
-- Vídeo promocional
+| Área | Tecnologías aplicadas |
+|---|---|
+| Backend | Node.js, Express, REST API, OAuth 2.0, MySQL, JWT, Docker |
+| Frontend | React Native, Expo, TypeScript, react-native-svg, react-native-maps |
+| Metodología | SCRUM, GitHub, Trello, Figma |
