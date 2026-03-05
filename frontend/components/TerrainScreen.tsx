@@ -348,7 +348,7 @@ export default function TerrainScreen({
           <View>
             {climbs.length > 0 ? (
               climbs.map((climb, idx) => (
-                <View style={styles.card}>
+                <View key={climb.id || idx} style={styles.card}>
                   <View
                     style={[
                       styles.cardHeader,

@@ -186,9 +186,8 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
         <View style={styles.catBody}>
           {list.map(d=>{
             const r = rows.find(rr=>rr.d===d)!;
-            const rowProps: any = { key: d };
             return (
-              <View {...rowProps} style={styles.row}>
+              <View key={d} style={styles.row}>
                   <View style={styles.rowLeft}>
                     <Text style={styles.duration}>{r.d}</Text>
                     <Text style={styles.wval}>{Math.round(r.v)} W{r.wkg !== undefined ? ` · ${r.wkg} W/kg` : ''}</Text>
@@ -224,18 +223,16 @@ export default function PotenciaScreen({ powerMap, weightKg, activities = [], pr
         
         <View style={{marginTop: 12}}>
           <Text style={styles.profileSubtitle}>💪 Fortalezas:</Text>
-          {cyclistProfile.strengths.map((s, i) => {
-            const p: any = { key: i };
-            return <Text {...p} style={styles.profileListItem}>• {s}</Text>;
-          })}
+          {cyclistProfile.strengths.map((s, i) => (
+            <Text key={i} style={styles.profileListItem}>• {s}</Text>
+          ))}
         </View>
         
         <View style={{marginTop: 8}}>
           <Text style={styles.profileSubtitle}>🎯 A mejorar:</Text>
-          {cyclistProfile.improvements.map((s, i) => {
-            const p: any = { key: i };
-            return <Text {...p} style={styles.profileListItem}>• {s}</Text>;
-          })}
+          {cyclistProfile.improvements.map((s, i) => (
+            <Text key={i} style={styles.profileListItem}>• {s}</Text>
+          ))}
         </View>
       </View>
 

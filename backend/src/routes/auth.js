@@ -1,17 +1,22 @@
 const express = require('express');
 const router = express.Router();
 
+// Credenciales de la app de Strava (se leen de variables de entorno por seguridad)
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
 const STRAVA_REDIRECT_URI = process.env.STRAVA_REDIRECT_URI;
-// URI scheme or URL where the frontend app can receive the JWT (e.g. "ridemetrics://auth" or a web URL)
+// URI de la app móvil donde se redirige el JWT tras el login (esquema personalizado o URL web)
 const FRONTEND_CALLBACK_URI = process.env.FRONTEND_CALLBACK_URI || 'ridemetrics://auth';
 
+// Funciones del modelo de tokens para guardar y renovar tokens de atletas
 const { saveOrUpdateAthleteToken } = require('../models/tokens');
 const { refreshAthleteToken, getAthleteById, getAthletesToRefresh } = require('../models/tokens');
+// Funciones para gestionar sesiones temporales del flujo de polling OAuth
 const { createSession, storeJwtForState, getJwtForState } = require('../models/loginSessions');
+// Librería para crear y verificar tokens JWT
 const jwt = require('jsonwebtoken');
 
+// Comprueba que las variables de entorno de Strava están configuradas
 function validateStravaConfig() {
   const missing = [];
   if (!STRAVA_CLIENT_ID) missing.push('STRAVA_CLIENT_ID');
@@ -20,6 +25,7 @@ function validateStravaConfig() {
   return missing;
 }
 
+// GET /auth/strava — Redirige directamente al formulario de autorización de Strava
 router.get('/strava', (req, res) => {
   const missing = validateStravaConfig();
   if (missing.length) {
@@ -39,12 +45,14 @@ router.get('/strava', (req, res) => {
   res.redirect(url);
 });
 
-// Start OAuth flow: generate state and return URL (frontend will open it)
+// GET /auth/start — Inicia el flujo OAuth: genera un state único, lo guarda en BD y devuelve la URL de autorización
 router.get('/start', async (req, res) => {
   const missing = validateStravaConfig();
   if (missing.length) return res.status(500).json({ error: 'Missing Strava configuration in backend/.env', missing });
+  // Genera un state aleatorio para prevenir ataques CSRF
   const state = (Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 32);
   try {
+    // Guarda la sesión temporal en la base de datos
     await createSession(state);
     const params = new URLSearchParams({
       client_id: STRAVA_CLIENT_ID,
@@ -55,12 +63,14 @@ router.get('/start', async (req, res) => {
       state
     });
     const url = `https://www.strava.com/oauth/authorize?${params.toString()}`;
+    // Devuelve la URL y el state al frontend para que inicie el polling
     res.json({ ok: true, url, state });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
 });
 
+// GET /auth/callback — Strava redirige aquí tras que el usuario autorice la app
 router.get('/callback', async (req, res) => {
   const missing = validateStravaConfig();
   if (missing.length) {
@@ -73,6 +83,7 @@ router.get('/callback', async (req, res) => {
   if (!code) return res.status(400).json({ error: 'Missing code' });
 
   try {
+    // Intercambia el código de autorización por los tokens de acceso y refresco
     const tokenRes = await fetch('https://www.strava.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -85,25 +96,27 @@ router.get('/callback', async (req, res) => {
     });
 
     const data = await tokenRes.json();
-    // Store tokens in database
+    // Guarda o actualiza los tokens del atleta en la base de datos
     try {
       await saveOrUpdateAthleteToken(data);
     } catch (dbErr) {
       console.error('DB save error', dbErr);
-      // continue and return token data, but log DB error
+      // Continúa aunque falle el guardado en BD para no bloquear el login
     }
 
-    // Create JWT and handle polling flow (if state provided)
+    // Genera el JWT propio de la aplicación y gestiona el flujo de polling si hay state
     try {
       const jwtSecret = process.env.JWT_SECRET || 'dev_secret';
       const athlete_id = data.athlete && data.athlete.id ? data.athlete.id : null;
+      // Firma el JWT con el athlete_id, válido 30 días
       const token = jwt.sign({ athlete_id }, jwtSecret, { expiresIn: '30d' });
 
       const state = req.query.state;
       if (state) {
         try {
+          // Guarda el JWT en la BD asociado al state para que el frontend lo recoja por polling
           await storeJwtForState(state, token);
-          // Redirect to a simple page where the user is told to return to the app
+          // Redirige a la página de confirmación para que el usuario vuelva a la app
           return res.redirect(`/auth/complete?state=${encodeURIComponent(state)}`);
         } catch (err) {
           console.error('Failed storing jwt for state', err);
@@ -111,7 +124,7 @@ router.get('/callback', async (req, res) => {
         }
       }
 
-      // No state: fallback to redirecting to the frontend scheme if configured
+      // Sin state: redirige directamente al esquema URI de la app móvil con el JWT
       try {
         const redirectTo = `${FRONTEND_CALLBACK_URI}?jwt=${encodeURIComponent(token)}`;
         return res.redirect(redirectTo);
@@ -130,16 +143,17 @@ router.get('/callback', async (req, res) => {
 
 module.exports = router;
 
-// Endpoint to refresh a single athlete or all expired
+// GET /auth/refresh — Refresca el token de un atleta concreto o de todos los expirados
 router.get('/refresh', async (req, res) => {
   const athleteId = req.query.athlete_id;
   try {
     if (athleteId) {
+      // Refresca solo el atleta indicado por parámetro
       const data = await refreshAthleteToken(athleteId);
       return res.json({ ok: true, refreshed: [athleteId], data });
     }
 
-    // refresh all expired athletes
+    // Si no se indica atleta, refresca los 5 primeros con el token más próximo a expirar
     const toRefresh = await getAthletesToRefresh(5);
     const refreshed = [];
     for (const row of toRefresh) {
@@ -156,14 +170,13 @@ router.get('/refresh', async (req, res) => {
   }
 });
 
-// POST /auth/token-login
-// Accept a Strava access token (single-user) and create/save athlete record, return JWT
+// POST /auth/token-login — Login directo con un access_token de Strava ya obtenido (modo monousuario)
 router.post('/token-login', async (req, res) => {
   const access_token = req.body.access_token || req.headers['x-access-token'];
   if (!access_token) return res.status(400).json({ error: 'Missing access_token' });
 
   try {
-    // Fetch athlete profile from Strava
+    // Verifica el token consultando el perfil del atleta en Strava
     const profileRes = await fetch('https://www.strava.com/api/v3/athlete', {
       headers: { Authorization: `Bearer ${access_token}` }
     });
@@ -172,24 +185,24 @@ router.post('/token-login', async (req, res) => {
 
     const athlete_id = profile.id;
 
-    // Construct a tokenResponse-like object to store
+    // Construye un objeto de token compatible con el modelo para guardarlo en BD
     const tokenResponse = {
       access_token,
       refresh_token: null,
-      expires_at: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 365), // 1 year default
+      expires_at: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 365), // Expira en 1 año por defecto
       token_type: 'Bearer',
       scope: 'read',
       athlete: { id: athlete_id }
     };
 
-    // Save token
+    // Guarda el token en la base de datos
     try {
       await saveOrUpdateAthleteToken(tokenResponse, athlete_id);
     } catch (dbErr) {
       console.error('DB save error', dbErr);
     }
 
-    // Issue JWT
+    // Genera y devuelve el JWT de la aplicación
     const jwtSecret = process.env.JWT_SECRET || 'dev_secret';
     const token = jwt.sign({ athlete_id }, jwtSecret, { expiresIn: '30d' });
 
@@ -200,12 +213,13 @@ router.post('/token-login', async (req, res) => {
   }
 });
 
-// Poll for JWT using state
+// GET /auth/poll — El frontend consulta periódicamente si ya se completó el login (flujo polling)
 router.get('/poll', async (req, res) => {
   const state = req.query.state;
   if (!state) return res.status(400).json({ error: 'Missing state' });
   try {
     const jwt = await getJwtForState(state);
+    // Si todavía no hay JWT asociado al state, devuelve pending: true
     if (!jwt) return res.json({ pending: true });
     return res.json({ ok: true, jwt });
   } catch (err) {
@@ -213,7 +227,7 @@ router.get('/poll', async (req, res) => {
   }
 });
 
-// Simple completion page for browser: show message and state
+// GET /auth/complete — Página de confirmación en el navegador tras autorizar en Strava
 router.get('/complete', (req, res) => {
   const state = req.query.state || '';
   res.send(`<html><body><h3>Autorización completada</h3><p>Puedes volver a la app. Si tu app no detecta automáticamente la sesión, usa este código:</p><pre>${state}</pre></body></html>`);
